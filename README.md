@@ -172,7 +172,7 @@ kubectl get pods -A
 The infrastructure is just the stage -- the actual exercise is the loop
 below. Work through it once end-to-end, then repeat with a different app
 and a different failure mode. See
-[docs/student-guide.md](docs/student-guide.md) section 5 for the full
+[docs/student-guide.md](docs/student-guide.md) section 6 for the full
 step-by-step task list with exact commands.
 
 1. Deploy, confirm all five apps work, and install Datadog (dashboards +

@@ -100,7 +100,33 @@ automatically:
 Demo login credentials (banking and student-portal) use password
 `demo123` -- see each app's `sql/init.sql` for the exact usernames.
 
-## 5. Task list
+## 5. Chaos script quick reference
+
+Run these from the repo root. `<app>` is one of `ecommerce`, `banking`,
+`food-delivery`, `student-portal`, `support-tickets` -- also the namespace
+name and the deployment prefix (`<app>-backend`), which is why it's repeated
+in the `scale-to-zero`/`bad-deploy` syntax below. See
+[README.md](../README.md#breaking-things-on-purpose) for what each failure
+mode actually does and how to observe it.
+
+| Script | Syntax | Example |
+|---|---|---|
+| `inject-latency.sh` | `<app> [ms]` | `./scripts/chaos/inject-latency.sh ecommerce 3000` |
+| `inject-errors.sh` | `<app> [rate 0-1]` | `./scripts/chaos/inject-errors.sh banking 0.5` |
+| `memory-spike.sh` | `<app> [mb]` | `./scripts/chaos/memory-spike.sh support-tickets 300` |
+| `cpu-spike.sh` | `<app> [seconds]` | `./scripts/chaos/cpu-spike.sh food-delivery 10` |
+| `drop-db-connection.sh` | `<app>` | `./scripts/chaos/drop-db-connection.sh student-portal` |
+| `kill-random-pod.sh` | `<namespace>` | `./scripts/chaos/kill-random-pod.sh banking` |
+| `scale-to-zero.sh` | `<namespace> <deployment>` | `./scripts/chaos/scale-to-zero.sh support-tickets support-tickets-backend` |
+| `bad-deploy.sh` | `<namespace> <deployment> <container>` | `./scripts/chaos/bad-deploy.sh banking banking-backend banking-backend` |
+| `reset.sh` | `<app>` | `./scripts/chaos/reset.sh ecommerce` |
+
+Each script prints its own reset/rollback command after it runs, so you
+don't need to memorize the undo step. Note `scale-to-zero` and `bad-deploy`
+aren't undone by `reset.sh` -- each one prints the exact `kubectl` command
+to revert it instead.
+
+## 6. Task list
 
 Work through these roughly in order. Take notes as you go -- you'll need
 them for the postmortems.
@@ -133,7 +159,7 @@ them for the postmortems.
    yourself directly with the scripts in `scripts/chaos/` and writing your
    own scenario for a classmate.
 
-## 6. Tear down
+## 7. Tear down
 
 When you're done, avoid leaving the lab running (it costs real money):
 
