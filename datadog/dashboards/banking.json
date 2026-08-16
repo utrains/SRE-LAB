@@ -2,10 +2,13 @@
   "title": "SRE Lab - banking",
   "description": "Golden signals for the banking service (frontend + backend).",
   "layout_type": "ordered",
-  "is_read_only": false,
   "notify_list": [],
   "template_variables": [
-    { "name": "env", "prefix": "env", "default": "lab" }
+    {
+      "name": "env",
+      "prefix": "env",
+      "default": "lab"
+    }
   ],
   "widgets": [
     {
@@ -72,7 +75,11 @@
         "title": "Recent Error Logs",
         "type": "log_stream",
         "query": "service:banking-backend status:error",
-        "columns": ["core_host", "core_service", "tags.status"]
+        "columns": [
+          "core_host",
+          "core_service",
+          "tags.status"
+        ]
       }
     }
   ]

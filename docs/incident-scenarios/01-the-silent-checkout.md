@@ -19,7 +19,8 @@ green-ish but something feels off. Figure out what's wrong and fix it.
    `https://ecommerce.$(cat .lab-domain)`.
 3. Form a hypothesis, confirm it, fix it.
 4. Write a one-paragraph postmortem: what broke, how you found it, how you
-   fixed it, and one thing you'd do to prevent it next time.
+   fixed it, and one thing you'd do to prevent it next time -- then be
+   ready to explain it out loud, from memory, in under two minutes.
 
 ## Hints (use only if stuck)
 

@@ -1,7 +1,7 @@
 {
   "name": "[SRE Lab] High p95 latency",
   "type": "metric alert",
-  "query": "p95(last_10m):trace.express.request.duration{env:lab} by {service} > 1",
+  "query": "avg(last_10m):p95:trace.express.request.duration{env:lab} by {service} > 1",
   "message": "{{#is_alert}}p95 latency for {{service.name}} is above 1s over the last 10 minutes.{{/is_alert}}\n{{#is_warning}}p95 latency for {{service.name}} is above 500ms.{{/is_warning}}\n{{#is_recovery}}Latency for {{service.name}} has recovered.{{/is_recovery}}\n\nSee docs/runbooks/high-latency.md.\n@slack-sre-lab-alerts",
   "tags": ["env:lab", "team:sre-lab"],
   "options": {

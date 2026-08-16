@@ -20,7 +20,8 @@ at first glance.
 3. `/readyz` exists for a reason -- use it.
 4. Once you've identified and fixed the immediate problem, explain in your
    postmortem why `/healthz` didn't catch this but `/readyz` did (or
-   would have, if you'd checked it first).
+   would have, if you'd checked it first) -- then be ready to explain it
+   out loud, from memory, in under two minutes.
 
 ## Hints (use only if stuck)
 

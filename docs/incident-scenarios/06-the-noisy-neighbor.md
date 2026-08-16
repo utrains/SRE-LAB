@@ -30,7 +30,8 @@ finished cleanly.
 5. In your postmortem, explain why restarting the ecommerce or banking
    *Deployment* would not have fixed this on its own, and what you'd
    change (see the RDS tradeoff table in `docs/architecture.md`) so one
-   stray job can't do this to every app sharing the instance again.
+   stray job can't do this to every app sharing the instance again -- then
+   be ready to explain it out loud, from memory, in under two minutes.
 
 ## Hints (use only if stuck)
 

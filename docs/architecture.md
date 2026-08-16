@@ -109,8 +109,9 @@ traces from every app.
 ## Application layer
 
 Every backend is Node.js + Express, and every frontend is React + Vite +
-Tailwind, for consistency across the five apps (see
-`apps/<app>/backend` and `apps/<app>/frontend`). Each backend exposes:
+Tailwind served as a static bundle by nginx, for consistency across the
+five apps (see `apps/<app>/backend` and `apps/<app>/frontend`). Each
+backend exposes:
 
 - `GET /healthz` -- liveness only, always returns 200 if the process is up.
 - `GET /readyz` -- readiness, which runs a real `SELECT 1` against Postgres.
@@ -134,11 +135,40 @@ repo contains a real API key. Passing `DATADOG_API_KEY` (and optionally
 `DATADOG_APP_KEY`, `DATADOG_SITE`) to `scripts/setup.sh` installs the
 Datadog Agent and Cluster Agent via Helm (`datadog/helm-values.yaml`) with
 APM and log collection enabled, and -- if an app key was provided --
-imports every dashboard/monitor via the Datadog API (see step 9/9 in
+imports every dashboard/monitor via the Datadog API (see step 10/10 in
 `scripts/setup.sh`). Every backend requires `dd-trace` as the very first
-line executed (`src/tracer.js`, loaded via `-r`), so a single HTTP request
-is traceable frontend -> backend -> Postgres in APM. See
-`docs/student-guide.md` for the exact account setup and env vars, and
+line executed (`src/tracer.js`, loaded via `-r`).
+
+That covers the backend. The frontend is a static SPA served by nginx --
+there's no server process for `dd-trace` to patch, so browser-side
+visibility is a separate Datadog product (RUM), wired up separately:
+if both `DATADOG_API_KEY` and `DATADOG_APP_KEY` are set, step 3/10 of
+`scripts/setup.sh` provisions a Datadog RUM application per app via the
+RUM Applications API (`POST /api/v2/rum/applications`, reusing an existing
+one by name on re-runs rather than duplicating), and step 4/10 bakes the
+resulting `applicationId`/`clientToken` into that app's frontend build as
+`VITE_`-prefixed Docker build args (Vite only exposes env vars present at
+*build* time -- a static bundle has no runtime env injection the way a
+Deployment's env vars work). `apps/<app>/frontend/src/rum.js`, imported
+first in `main.jsx` (same "load before anything else" pattern as
+`tracer.js` on the backend), initializes `@datadog/browser-rum` with those
+values and `allowedTracingUrls: [window.location.origin]`.
+
+That last part is what makes a single HTTP request genuinely traceable
+frontend -> backend -> Postgres in APM, not just conceptually adjacent:
+each frontend's nginx proxies `/api/*` to its own backend Service
+internally (see `nginx.conf`), so from the browser's perspective every API
+call is same-origin -- `window.location.origin` alone is sufficient for
+RUM to inject trace-propagation headers into it, no CORS configuration or
+cross-origin allowlisting needed, and dd-trace on the receiving end (any
+reasonably current version; this lab pins `^5.0.0`) picks the trace up
+automatically. The result: a RUM session's span for, say, `GET
+/api/products` stitches directly into that same request's backend APM
+trace. Session Replay is deliberately left off
+(`sessionReplaySampleRate: 0`) to keep RUM scoped to tracing rather than
+screen recording.
+
+See `docs/student-guide.md` for the exact account setup and env vars, and
 `datadog/dashboards/` + `datadog/monitors/` for the dashboard and monitor
 definitions themselves.
 

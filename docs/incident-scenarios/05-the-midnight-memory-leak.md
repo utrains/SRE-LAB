@@ -23,7 +23,8 @@ up, then comes back.
    a minute or two apart, since this isn't a live watch flag on `top`).
 4. Fix the immediate symptom, then write a postmortem covering: why did it
    "resolve itself" between restarts, and why does that make this kind of
-   issue easy to accidentally ignore in a real on-call rotation?
+   issue easy to accidentally ignore in a real on-call rotation? Be ready
+   to explain it out loud, from memory, in under two minutes.
 
 ## Hints (use only if stuck)
 

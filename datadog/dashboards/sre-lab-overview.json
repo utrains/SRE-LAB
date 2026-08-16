@@ -2,10 +2,13 @@
   "title": "SRE Lab Overview",
   "description": "Four golden signals (latency, traffic, errors, saturation) across all five lab apps.",
   "layout_type": "ordered",
-  "is_read_only": false,
   "notify_list": [],
   "template_variables": [
-    { "name": "env", "prefix": "env", "default": "lab" }
+    {
+      "name": "env",
+      "prefix": "env",
+      "default": "lab"
+    }
   ],
   "widgets": [
     {
@@ -84,7 +87,9 @@
         "title": "Cluster Nodes Ready",
         "type": "query_value",
         "requests": [
-          { "q": "avg:kubernetes_state.node.count{$env}" }
+          {
+            "q": "avg:kubernetes_state.node.count{$env}"
+          }
         ]
       }
     },
@@ -93,7 +98,11 @@
         "title": "Error Logs Across All Apps",
         "type": "log_stream",
         "query": "status:error",
-        "columns": ["core_host", "core_service", "tags.status"]
+        "columns": [
+          "core_host",
+          "core_service",
+          "tags.status"
+        ]
       }
     }
   ]

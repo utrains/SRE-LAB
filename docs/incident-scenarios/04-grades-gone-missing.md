@@ -18,7 +18,8 @@ and it seems to be getting worse.
 2. Look at the pods -- are all of them `Running`, or are some stuck?
 3. Identify what changed and get the service back to fully healthy.
 4. In your postmortem, explain why *some* requests still succeeded during
-   this incident instead of the whole app going down at once.
+   this incident instead of the whole app going down at once -- then be
+   ready to explain it out loud, from memory, in under two minutes.
 
 ## Hints (use only if stuck)
 

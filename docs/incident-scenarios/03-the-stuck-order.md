@@ -21,6 +21,8 @@ successfully -- it's specifically the status tracking that's broken.
    `docs/architecture.md` and check its pods.
 3. Fix it, then confirm the tracking page recovers on its own (no redeploy
    of the backend needed -- why?).
+4. Write a postmortem, then be ready to explain it out loud, from memory,
+   in under two minutes.
 
 ## Hints (use only if stuck)
 
