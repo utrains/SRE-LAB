@@ -407,7 +407,7 @@ for the full list and the rationale behind each one.
 - [docs/student-guide.md](docs/student-guide.md) -- complete step-by-step walkthrough
 - [docs/slo-sla-sli.md](docs/slo-sla-sli.md) -- SLI/SLO/SLA definitions with real per-app examples
 - [docs/error-budget.md](docs/error-budget.md) -- how to calculate error budget burn from an incident
-- **[docs/sre-lab-experiments-deck.pptx](docs/sre-lab-experiments-deck.pptx)** -- 28-slide class deck for the hands-on session (PDF alongside it), styled to match the main course deck
+- **[docs/monitoring-sre-lab-class-deck.pptx](docs/monitoring-sre-lab-class-deck.pptx)** -- the 62-slide class deck (PDF alongside it): concepts, the lab, all 12 failure modes, and the interview answers from both chairs
 - [docs/testing-the-lab.md](docs/testing-the-lab.md) -- checklist for exercising all 12 failure modes: what to expect, what to check in Datadog, how to undo each one
 - [docs/devops-vs-sre.md](docs/devops-vs-sre.md) -- who owns what, the change-vs-condition split, and the end-to-end path from alert to Datadog logs to `kubectl` to postmortem, told from both chairs
 - [docs/runbooks/](docs/runbooks/) -- diagnostic playbooks (pod crash loops, OOMKill, high latency, DB connection exhaustion, ingress 502s, RDS connection limits, stalled rollouts, config/secret drift)
