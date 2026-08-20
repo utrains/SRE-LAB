@@ -18,13 +18,21 @@ app.get("/healthz", (req, res) => {
 });
 
 app.get("/readyz", async (req, res) => {
+  // Both failure paths log the reason, not just the status code. A pod that
+  // fails readiness is pulled out of the Service and stops receiving API
+  // traffic, so nothing else it does will ever reach the logs -- this line
+  // is the only thing that explains itself in Datadog (search
+  // `service:<app>-backend status:error`). It repeats once per failed probe,
+  // every 10s, per the readinessProbe in k8s/deployment-backend.yaml.
   if (isDbDropActive()) {
+    console.error("readiness check failed: db connection dropped (chaos)");
     return res.status(503).json({ status: "not ready", reason: "db connection dropped (chaos)" });
   }
   try {
     await checkConnection();
     res.json({ status: "ready" });
   } catch (err) {
+    console.error("readiness check failed:", err.message);
     res.status(503).json({ status: "not ready", reason: err.message });
   }
 });

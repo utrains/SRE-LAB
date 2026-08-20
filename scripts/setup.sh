@@ -17,8 +17,26 @@
 
 set -euo pipefail
 
+# This script uses associative arrays (declare -A) and expands possibly-empty
+# arrays under `set -u`, both of which need bash 4.4+. macOS still ships bash
+# 3.2 as /bin/bash, where this fails several steps in with a confusing
+# "declare: -A: invalid option" -- so say so up front instead.
+if [ -z "${BASH_VERSINFO:-}" ] \
+  || [ "${BASH_VERSINFO[0]}" -lt 4 ] \
+  || { [ "${BASH_VERSINFO[0]}" -eq 4 ] && [ "${BASH_VERSINFO[1]}" -lt 4 ]; }; then
+  echo "This script needs bash 4.4 or newer (found: ${BASH_VERSION:-not bash})." >&2
+  echo "" >&2
+  echo "macOS ships bash 3.2. Install a current one and run the script with it:" >&2
+  echo "  brew install bash" >&2
+  echo "  \$(brew --prefix)/bin/bash ./scripts/$(basename "${BASH_SOURCE[0]}")" >&2
+  exit 1
+fi
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TF_DIR="$REPO_ROOT/terraform"
+# Pinned rather than 'latest' so a class all gets the same thing (see step 9).
+METRICS_SERVER_VERSION="v0.9.0"
+
 APPS=(ecommerce banking food-delivery student-portal support-tickets)
 
 echo "==> Preflight checks"
@@ -104,7 +122,36 @@ fi
 echo "==> 1/10 terraform apply"
 cd "$TF_DIR"
 terraform init -input=false
-terraform apply -auto-approve
+
+# The five Route 53 alias records (dns.tf) are gated behind
+# create_dns_records, which defaults to false because the ALB they alias
+# doesn't exist yet on a first run. On a *re-run* that default is actively
+# harmful: a plain apply here deletes all five records, and step 9 doesn't
+# recreate them until ~10 minutes later, so every app URL returns NXDOMAIN
+# for the whole build-and-deploy phase. That matters because re-running this
+# script is the documented way to add Datadog to an existing lab.
+#
+# So: if the shared ALB is already out there, keep the records. The lookup is
+# read-only and falls back to the old behaviour if it fails for any reason
+# (no state yet, no permission), which is never worse than not checking.
+CREATE_DNS=false
+EXISTING_CLUSTER=$(terraform output -raw cluster_name 2>/dev/null || true)
+EXISTING_REGION=$(terraform output -raw region 2>/dev/null || true)
+if [ -n "$EXISTING_CLUSTER" ] && [ -n "$EXISTING_REGION" ] \
+  && terraform state list 2>/dev/null | grep -q '^aws_route53_record\.app\['; then
+  ALB_COUNT=$(aws resourcegroupstaggingapi get-resources \
+    --region "$EXISTING_REGION" \
+    --tag-filters "Key=elbv2.k8s.aws/cluster,Values=${EXISTING_CLUSTER}" \
+    --resource-type-filters elasticloadbalancing:loadbalancer \
+    --query 'length(ResourceTagMappingList)' --output text 2>/dev/null || echo 0)
+  if [ "$ALB_COUNT" != "0" ] && [ "$ALB_COUNT" != "None" ]; then
+    CREATE_DNS=true
+    echo "    existing ALB found -- keeping the Route 53 records instead of"
+    echo "    deleting and recreating them (app URLs stay up during this run)"
+  fi
+fi
+
+terraform apply -auto-approve -var="create_dns_records=${CREATE_DNS}"
 
 CLUSTER_NAME=$(terraform output -raw cluster_name)
 REGION=$(terraform output -raw region)
@@ -130,6 +177,13 @@ echo "==> 3/10 provision Datadog RUM applications (optional)"
 # loop needs that guard either way.
 declare -A RUM_APP_IDS
 declare -A RUM_CLIENT_TOKENS
+# Provisioned RUM ids/tokens are cached here (gitignored) so a later run
+# WITHOUT an application key can still bake RUM into the frontend bundles.
+# Without this cache, re-running setup.sh with only DATADOG_API_KEY set --
+# which is exactly what the README recommends, to avoid duplicating
+# dashboards -- rebuilds all 5 frontends with RUM stripped out, and browser
+# spans silently disappear from every trace.
+RUM_CACHE="$REPO_ROOT/.rum-apps.json"
 if [ -n "${DATADOG_API_KEY:-}" ] && [ -n "${DATADOG_APP_KEY:-}" ]; then
   DATADOG_SITE="${DATADOG_SITE:-datadoghq.com}"
   for app in "${APPS[@]}"; do
@@ -161,6 +215,26 @@ if [ -n "${DATADOG_API_KEY:-}" ] && [ -n "${DATADOG_APP_KEY:-}" ]; then
         -d "{\"data\":{\"type\":\"rum_application_create\",\"attributes\":{\"name\":\"${rum_name}\",\"type\":\"browser\"}}}")
       RUM_APP_IDS[$app]=$(echo "$response" | jq -r '.data.id')
       RUM_CLIENT_TOKENS[$app]=$(echo "$response" | jq -r '.data.attributes.client_token')
+    fi
+  done
+
+  # Cache for app-key-less re-runs (see RUM_CACHE comment above).
+  : > "${RUM_CACHE}.tmp"
+  for app in "${APPS[@]}"; do
+    jq -n --arg a "$app" --arg id "${RUM_APP_IDS[$app]}" --arg t "${RUM_CLIENT_TOKENS[$app]}" \
+      '{($a): {id: $id, token: $t}}' >> "${RUM_CACHE}.tmp"
+  done
+  jq -s add "${RUM_CACHE}.tmp" > "$RUM_CACHE" && rm -f "${RUM_CACHE}.tmp"
+
+elif [ -n "${DATADOG_API_KEY:-}" ] && [ -f "$RUM_CACHE" ]; then
+  echo "    no DATADOG_APP_KEY this run -- reusing cached RUM config from .rum-apps.json"
+  echo "    (delete that file if you want frontends rebuilt without RUM)"
+  for app in "${APPS[@]}"; do
+    cached_id=$(jq -r --arg a "$app" '.[$a].id // empty' "$RUM_CACHE")
+    cached_token=$(jq -r --arg a "$app" '.[$a].token // empty' "$RUM_CACHE")
+    if [ -n "$cached_id" ] && [ -n "$cached_token" ]; then
+      RUM_APP_IDS[$app]="$cached_id"
+      RUM_CLIENT_TOKENS[$app]="$cached_token"
     fi
   done
 else
@@ -240,7 +314,49 @@ for app in "${APPS[@]}"; do
   done
 done
 
-echo "==> 9/10 install the AWS Load Balancer Controller, apply Ingress, and create DNS records"
+# A successful `kubectl apply` only means the API server accepted the manifest.
+# It says nothing about whether the new pods ever became Ready -- a rollout can
+# stall on a bad image, a failed probe, an OOMKill loop or a namespace quota
+# with no headroom for the surge pod, and this script would still exit 0 with
+# every app quietly running the previous version. That is the exact failure
+# mode docs/runbooks/failed-rollout.md is about, so don't ship it here.
+echo "    verifying every rollout actually became healthy"
+rollout_failures=()
+for app in "${APPS[@]}"; do
+  for component in backend frontend; do
+    if ! kubectl -n "$app" rollout status "deployment/${app}-${component}" --timeout=180s >/dev/null 2>&1; then
+      rollout_failures+=("${app}/${app}-${component}")
+    fi
+  done
+done
+
+if [ ${#rollout_failures[@]} -gt 0 ]; then
+  echo "" >&2
+  echo "ERROR: these deployments never became healthy:" >&2
+  for f in "${rollout_failures[@]}"; do
+    ns="${f%%/*}"; deploy="${f##*/}"
+    echo "  - $f" >&2
+    kubectl -n "$ns" get pods -l "app=${deploy}" --no-headers 2>/dev/null | sed 's/^/      /' >&2
+    kubectl -n "$ns" get events --field-selector type=Warning --sort-by=.lastTimestamp 2>/dev/null \
+      | tail -3 | sed 's/^/      /' >&2
+  done
+  echo "" >&2
+  echo "Diagnose with: kubectl -n <namespace> describe pod <pod>" >&2
+  echo "See docs/runbooks/failed-rollout.md. Fix the cause and re-run this script." >&2
+  exit 1
+fi
+
+echo "==> 9/10 install metrics-server + the AWS Load Balancer Controller, apply Ingress, and create DNS records"
+
+# metrics-server serves the metrics.k8s.io API. Without it `kubectl top` fails
+# and -- more importantly for this lab -- every HorizontalPodAutoscaler sits at
+# `cpu: <unknown>/70%` forever and can never scale, which makes
+# scripts/chaos/cpu-spike.sh's whole point (watch the HPA scale out) impossible
+# to demonstrate. EKS does not ship it by default.
+echo "    installing metrics-server"
+kubectl apply -f "https://github.com/kubernetes-sigs/metrics-server/releases/download/${METRICS_SERVER_VERSION}/components.yaml" >/dev/null
+kubectl -n kube-system rollout status deployment/metrics-server --timeout=180s
+
 helm repo add eks https://aws.github.io/eks-charts >/dev/null 2>&1 || true
 helm repo update >/dev/null
 helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \

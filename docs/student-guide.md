@@ -1,9 +1,19 @@
 # Student Guide
 
-Welcome to the SRE lab. You'll deploy five real applications to a shared
+Welcome to the lab. You'll deploy five real applications to a shared
 Kubernetes cluster, wire up your own Datadog account to observe them, then
 deliberately break things and practice diagnosing and fixing them like an
 on-call engineer would.
+
+Two kinds of engineer answer that pager, and this lab trains both. The
+**DevOps** half is the delivery path: a change shipped, something stopped
+being healthy, and you work back from "what changed" through Datadog to
+`kubectl` and a rollback. The **SRE** half is the service level: what the
+incident cost against an error budget, whether detection was good enough,
+and what to change so the next one is cheaper. Read
+[devops-vs-sre.md](devops-vs-sre.md) before section 7 -- it lays out the
+whole path end to end and is the single most interview-relevant document
+here.
 
 ## 1. Prerequisites
 
@@ -68,6 +78,23 @@ check **Dashboards > Dashboard List** for the 6 imported dashboards,
 **Monitors > Manage Monitors** for the 4 imported monitors, and **Digital
 Experience > RUM Applications** for the 5 provisioned RUM apps
 (`sre-lab-<app>`).
+
+**If your traces start at the backend and the browser span is missing**,
+RUM didn't make it into the frontend bundle. It's baked in at build time,
+so this is decided when the image is built, not at runtime. Check it from
+the browser console on any app page:
+
+```js
+window.DD_RUM            // undefined means the bundle has no RUM config
+window.DD_RUM.getInitConfiguration()   // applicationId, service, site
+```
+
+If it's undefined, re-run `setup.sh` with `DATADOG_APP_KEY` set once to
+provision the RUM applications. From then on the ids and client tokens are
+cached in `.rum-apps.json` at the repo root (gitignored), so later runs
+*without* the app key still build the frontends with RUM -- which matters,
+because the note below recommends omitting the app key on re-runs to avoid
+duplicating dashboards.
 
 Re-running with a new `DATADOG_API_KEY` (e.g. switching accounts) is safe
 -- the script restarts the Agent pods so they pick up the new key, and RUM
@@ -163,6 +190,29 @@ Clicking into a monitor shows its state history -- useful for exactly the
 question "did this just start, or has it been flapping for an hour?" that
 you'll need an answer to before writing a postmortem.
 
+### Logs and events: what the dashboard can't tell you
+
+Dashboards tell you *that* something is wrong and *how big*. The exact
+reason lives in two other places, and several incidents in this lab can
+only be solved from them:
+
+| Where | Query | What it gives you |
+|---|---|---|
+| **Logs** | `service:<app>-backend status:error` | The application's own error text -- a failed query, a rejected credential, a stack trace. Every container's logs are collected (`containerCollectAll` in `datadog/helm-values.yaml`) |
+| **Logs** | `kube_namespace:<app> "password authentication failed"` | Free-text search across everything in one namespace, for when you know the phrase but not the service |
+| **Events** | `source:kubernetes kube_namespace:<app>` | What *Kubernetes* thinks: probe failures, `OOMKilled`, `BackOff`, image pull errors, evictions. These are never in application logs, and are collected because `collectEvents` is enabled |
+
+A pod that fails its readiness probe is pulled out of the Service and stops
+receiving traffic, so it stops producing normal logs too -- which is why
+each backend logs `readiness check failed: <reason>` explicitly
+(`apps/<app>/backend/src/index.js`). That one line is often the entire
+diagnosis.
+
+The habit to build: dashboard to size it, logs or events to name it, and
+only then a terminal. See
+[devops-vs-sre.md](devops-vs-sre.md#5-the-decision-does-this-need-kubectl-at-all)
+for the table that maps a log line to the command that should follow it.
+
 None of the 4 thresholds here are arbitrary round numbers -- each is tied to
 something concrete:
 
@@ -195,12 +245,31 @@ mode actually does and how to observe it.
 | `kill-random-pod.sh` | `<namespace>` | `./scripts/chaos/kill-random-pod.sh banking` |
 | `scale-to-zero.sh` | `<namespace> <deployment>` | `./scripts/chaos/scale-to-zero.sh support-tickets support-tickets-backend` |
 | `bad-deploy.sh` | `<namespace> <deployment> <container>` | `./scripts/chaos/bad-deploy.sh banking banking-backend banking-backend` |
+| `break-config.sh` | `<app> [--undo]` | `./scripts/chaos/break-config.sh banking` |
+| `rotate-secret.sh` | `<app> [--undo]` | `./scripts/chaos/rotate-secret.sh ecommerce` |
+| `break-ingress.sh` | `<app> [--undo]` | `./scripts/chaos/break-ingress.sh food-delivery` |
+| `shrink-limits.sh` | `<app> [mi] [--undo]` | `./scripts/chaos/shrink-limits.sh support-tickets` |
 | `reset.sh` | `<app>` | `./scripts/chaos/reset.sh ecommerce` |
 
 Each script prints its own reset/rollback command after it runs, so you
 don't need to memorize the undo step. Note `scale-to-zero` and `bad-deploy`
 aren't undone by `reset.sh` -- each one prints the exact `kubectl` command
 to revert it instead.
+
+The bottom four are different in kind from the rest, and it's worth knowing
+why before you run them. The first five inject a *condition* into a running
+pod over HTTP: nothing is deployed, nothing changes on disk, and
+`reset.sh` clears them. The last four make a real **change** to the
+cluster -- a ConfigMap, a Secret, an Ingress, a Deployment's resources --
+exactly the way a person or a pipeline would, and then let the consequence
+play out. They each take `--undo` rather than being cleared by `reset.sh`,
+because some of them (notably `rotate-secret.sh`) overwrite the only copy
+of a value that exists in the cluster; the original is saved to
+`.chaos-backup/` so `--undo` can put it back.
+
+That distinction is the same one incidents have in real life, and
+[devops-vs-sre.md](devops-vs-sre.md#where-the-incident-starts) explains why
+your first triage question should be which of the two you're looking at.
 
 ## 7. Task list
 
@@ -221,7 +290,19 @@ them for the postmortems.
 3. **Break something.** Pick an incident from `docs/incident-scenarios/`
    (or ask your instructor to trigger one) without reading the answer
    key -- e.g. `01-the-silent-checkout.md` is an ecommerce latency problem
-   tied to `docs/runbooks/high-latency.md`.
+   tied to `docs/runbooks/high-latency.md`. There are ten, in two families:
+
+   - **01-06 are condition-driven.** Nothing shipped; the system met a
+     limit nobody moved. Symptoms are loud -- latency, errors, restarts --
+     and the monitors generally catch them.
+   - **07-10 are change-driven.** Somebody shipped a config value, a
+     rotated credential, an ingress edit, or a resource limit. These are
+     the ones a DevOps engineer meets most, and they are deliberately
+     quiet: in several of them, customer impact is zero and no monitor
+     fires usefully. Finding them means starting from `rollout history`
+     and the Kubernetes events, not from the dashboard.
+
+   Do at least one of each before you say you've done the lab.
 4. **Observe in Datadog.** Find the incident in your dashboards before
    you go looking at `kubectl` -- which widget moved first, and by how
    much?
@@ -233,9 +314,22 @@ them for the postmortems.
    how you fixed it, how much error budget it burned (see
    `docs/error-budget.md` for the calculation method), and one concrete
    prevention step.
-8. **Repeat** with a different incident scenario, then try triggering one
+8. **Tell it from both chairs.** Give the walkthrough as the DevOps
+   engineer who owns the delivery path, then again as the SRE who owns the
+   service level -- see
+   [devops-vs-sre.md](devops-vs-sre.md#two-ways-to-tell-the-same-incident)
+   for a worked pair. The second version is the hard one on scenarios
+   07-10, where customer impact is often zero and you still have to explain
+   why the incident mattered. Ninety seconds each, out loud, from memory.
+9. **Repeat** with a different incident scenario, then try triggering one
    yourself directly with the scripts in `scripts/chaos/` and writing your
    own scenario for a classmate.
+10. **Close the detection gap you found.** Scenarios 07-10 each expose
+    something none of the four imported monitors can see. Build one monitor
+    that would have caught your incident (there are two ready-made queries
+    in [devops-vs-sre.md](devops-vs-sre.md#the-detection-gap)), then
+    re-trigger the same fault and confirm it actually fires. An alert you
+    have watched fire is worth ten you have only written.
 
 ## 8. Tear down
 

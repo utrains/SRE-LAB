@@ -26,7 +26,7 @@ apps/<app>/         frontend/ (React+Vite+Tailwind), backend/ (Node+Express), k8
 ingress/           One Ingress resource per app, routed by hostname via a shared ALB
 datadog/           helm-values.yaml, dashboards/ (importable JSON), monitors/ (importable JSON)
 scripts/           setup.sh, teardown.sh, chaos/ (per-failure-mode scripts)
-docs/              architecture.md, slo-sla-sli.md, error-budget.md, runbooks/, incident-scenarios/, student-guide.md
+docs/              architecture.md, slo-sla-sli.md, error-budget.md, devops-vs-sre.md, runbooks/, incident-scenarios/, student-guide.md
 ```
 
 Each of the 5 apps under `apps/` is structured identically:
@@ -47,6 +47,11 @@ apps/<app>/
 
 ## Prerequisites
 
+- **bash 4.4 or newer** to run `scripts/setup.sh` (it uses associative
+  arrays). Linux and Git Bash on Windows are fine; **macOS still ships bash
+  3.2**, so run `brew install bash` and invoke the script with it
+  (`$(brew --prefix)/bin/bash ./scripts/setup.sh`). The script checks this
+  up front and tells you if it is too old.
 - `terraform`, `aws` CLI (configured with credentials for the target AWS
   account), `kubectl`, `docker`, `helm`, `jq`, and `envsubst` (from `gettext`;
   not preinstalled on macOS -- `brew install gettext && brew link --force
@@ -200,6 +205,14 @@ step-by-step task list with exact commands.
    [error budget](docs/error-budget.md), then repeat with a different
    incident.
 
+Then tell the story twice. Half the incidents here start with a *change*
+somebody shipped and half start with a *condition* nobody moved, and the
+two are diagnosed, fixed and explained differently --
+[docs/devops-vs-sre.md](docs/devops-vs-sre.md) covers the full path from
+"what changed" through Datadog logs to the decision about whether `kubectl`
+is even the right tool, and gives the DevOps and SRE version of the same
+incident side by side.
+
 When you're done for the day, tear down (see [Cost](#cost)) -- nothing in
 this lab needs to stay running between sessions.
 
@@ -247,7 +260,11 @@ Kubernetes-level failures) in copy-paste commands:
 | `kill-random-pod.sh <namespace>` | Pod crash | Deletes a random pod; the Deployment controller reschedules it immediately (self-healing demo, or run repeatedly to simulate a crash loop) |
 | `scale-to-zero.sh <namespace> <deployment>` | Full outage | Scales a Deployment to 0 replicas |
 | `bad-deploy.sh <namespace> <deployment> <container>` | Bad release | Points a container at a nonexistent image tag -- new pods sit in `ImagePullBackOff` while old pods keep serving until you roll back |
-| `reset.sh <app>` | -- | Clears latency/error-rate/db-drop/memory chaos state on an app. Does **not** undo `kill-random-pod`, `scale-to-zero`, or `bad-deploy` -- those revert with plain `kubectl` (each script prints the exact command) |
+| `break-config.sh <app> [--undo]` | Bad config rollout | Sets `PORT` in the backend ConfigMap to a value the probes don't check, then rolls the Deployment -- new pods start on the wrong port, fail both probes, and crash-loop while old pods keep serving |
+| `rotate-secret.sh <app> [--undo]` | Credential drift | Overwrites `PGPASSWORD` in the app's Secret with a value RDS doesn't know, then rolls the Deployment -- new pods stay `Running` but never `Ready`, because `/readyz` fails authentication |
+| `break-ingress.sh <app> [--undo]` | Edge misroute | Repoints the app's Ingress at the backend Service instead of the frontend. Every pod stays healthy, every dashboard stays green, and users get the *backend's* `404 Cannot GET /` -- an ALB with no healthy targets fails open rather than returning 503 |
+| `shrink-limits.sh <app> [mi] [--undo]` | Limit set too low | Patches the backend's memory request/limit down to 20Mi, below the ~31Mi the process actually needs -- new pods `OOMKilled` on startup from a manifest change, not a leak |
+| `reset.sh <app>` | -- | Clears latency/error-rate/db-drop/memory chaos state on an app. Does **not** undo `kill-random-pod`, `scale-to-zero`, or `bad-deploy` -- those revert with plain `kubectl` (each script prints the exact command). The four change-driven scripts above revert with their own `--undo` flag, since some of them (notably `rotate-secret.sh`) overwrite the only copy of a value in the cluster |
 
 See [How to use this lab](#how-to-use-this-lab) for the recommended
 workflow around these scripts.
@@ -336,6 +353,13 @@ actually fixes them:
 | `setup.sh` aborts during preflight with an NS delegation warning | Your domain's registrar isn't pointed at the Route 53 hosted zone `dns_zone_name` refers to -- Terraform only creates records *inside* the zone, never the delegation itself | Update the domain's NS records at its registrar to match the list the script prints, then re-run. Or pick a different `dns_zone_name` that's already fully managed in Route 53 |
 | `terraform apply` fails on `aws_eks_access_entry` with `ResourceInUseException` | You're running as the AWS account root user, and something (an older checkout, a manual `terraform apply` outside this script) created a duplicate access entry for the same principal | Already handled automatically in current `terraform/eks.tf` (`caller_is_root` skips the redundant entry) -- if you still hit this, you're likely on a stale checkout, pull latest |
 | `setup.sh` step 10/10 fails with `duplicate entries for key [name="DD_APM_NON_LOCAL_TRAFFIC"]` | Current Datadog Helm chart versions auto-inject this env var once `datadog.apm` is enabled; an older `datadog/helm-values.yaml` also set it explicitly | Already fixed in current `datadog/helm-values.yaml` (the manual `env:` override was removed) -- pull latest if you still see this |
+| `kubectl` suddenly talks to the wrong cluster (namespaces you don't recognise, `namespaces "datadog" not found`) | Starting Docker Desktop rewrites `current-context` in `~/.kube/config` to `docker-desktop`. If its Kubernetes is enabled, every later `kubectl` silently hits your laptop instead of the lab | `aws eks update-kubeconfig --name sre-lab --region us-east-1`, then confirm with `kubectl config current-context`. `setup.sh` does this at step 2, so it only bites mid-session |
+| `setup.sh` finished successfully but an app is still running the old image | A rollout can stall (bad image, failed probe, OOMKill loop, or a namespace quota with no headroom for the surge pod) while `kubectl apply` still reports success. `food-delivery` hit this: its extra Redis workload left no room under the old `limits.cpu: "2"` quota, so its backend could never roll | Fixed twice over: the namespace quotas now allow a surge pod and a full HPA scale-out, and `setup.sh` verifies every rollout with `kubectl rollout status` and fails loudly instead of exiting 0. Diagnose a stall with `kubectl -n <app> get events \| grep -i quota` and see [docs/runbooks/failed-rollout.md](docs/runbooks/failed-rollout.md) |
+| HPAs show `cpu: <unknown>/70%` and never scale, `kubectl top` says "Metrics API not available" | EKS doesn't ship metrics-server, and nothing was installing it -- so `metrics.k8s.io` didn't exist and `cpu-spike.sh` could never demonstrate an HPA scale-out | `setup.sh` step 9 now installs it. To add it to a running cluster: `kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/download/v0.9.0/components.yaml` |
+| A monitor query with `{env:lab}` returns "No data" for `kubernetes_state.*` metrics | Unified service tagging comes from the `tags.datadoghq.com/*` pod labels, so it only reaches pod-level telemetry. Cluster-level data (kube-state-metrics, Kubernetes events) is generated from the API server and never sees those labels | Fixed by `datadog.tags: ["env:lab"]` in `datadog/helm-values.yaml`, which tags everything the Agent and Cluster Agent emit. Re-run `setup.sh` (or `helm upgrade`) to apply it |
+| Traces start at the backend -- the browser/frontend span is missing from the flame graph | RUM config is baked into each frontend bundle at **build time**, and `setup.sh` only passes it when `DATADOG_APP_KEY` is set. Re-running `setup.sh` with just `DATADOG_API_KEY` (which this README recommends, to avoid duplicating dashboards) used to rebuild all 5 frontends with RUM stripped out, silently removing browser spans from every trace | Fixed: `setup.sh` now caches the provisioned RUM application ids/tokens to `.rum-apps.json` (gitignored) and reuses them on app-key-less re-runs. Pull latest and re-run `./scripts/setup.sh`. To confirm RUM is live, open an app and check `window.DD_RUM` is defined in the browser console; delete `.rum-apps.json` if you deliberately want frontends built without RUM |
+| `kubectl rollout undo` doesn't fix a broken ConfigMap or Secret | `rollout undo` restores a previous *pod template*. When the bad value lives in a ConfigMap or Secret the template references, every revision points at the same (still-wrong) object | Patch the object itself, then `kubectl -n <app> rollout restart deployment/<app>-backend`. See [docs/runbooks/config-and-secret-drift.md](docs/runbooks/config-and-secret-drift.md) -- this is deliberately the subject of incident scenarios 07 and 08 |
+| A chaos script's `--undo` says there's no backup to restore from | The four change-driven scripts save the original value to `.chaos-backup/` (gitignored) before overwriting it; the directory was deleted, or the fault was injected from a different checkout | For `break-config.sh`, `break-ingress.sh` and `shrink-limits.sh` the original values are the same across all five apps, and each script falls back to them automatically. `rotate-secret.sh` is the exception -- each app's DB password is generated by `setup.sh` and stored only in the Secret, so recovery means re-running `./scripts/setup.sh` |
 | `setup.sh` step 10/10 prints `ERROR: You did not set a datadog.appKey` | Expected if you only passed `DATADOG_API_KEY`, not `DATADOG_APP_KEY` | Harmless for the core lab -- the app key is only used by the optional `clusterAgent.metricsProvider` (Datadog-backed HPA custom metrics) stretch goal, plus RUM and dashboard/monitor import. Metrics, APM, and logs all work without it |
 | App URLs return `NXDOMAIN` right after `setup.sh` finishes | DNS propagation lag, or the registrar delegation issue above slipped past preflight (e.g. it was fixed seconds before you ran the script and hadn't propagated yet) | Wait a few minutes and retry; if it persists, re-check NS delegation manually: `aws route53 list-resource-record-sets --hosted-zone-id <zone-id> --query "ResourceRecordSets[?Type=='NS']"` vs `nslookup -type=NS <your-domain> 8.8.8.8` -- the two lists must match exactly |
 | Need to hit an app before DNS is fixed | -- | Bypass DNS entirely by talking to the ALB directly with a `Host` header: `curl -k -H "Host: ecommerce.<your-domain>" https://<alb-hostname>/` (get `<alb-hostname>` from `kubectl -n ecommerce get ingress ecommerce`; `-k` skips cert verification since the ALB's TLS cert is issued for `*.<your-domain>`, not its own `*.elb.amazonaws.com` hostname) |
@@ -382,5 +406,6 @@ for the full list and the rationale behind each one.
 - [docs/student-guide.md](docs/student-guide.md) -- complete step-by-step walkthrough
 - [docs/slo-sla-sli.md](docs/slo-sla-sli.md) -- SLI/SLO/SLA definitions with real per-app examples
 - [docs/error-budget.md](docs/error-budget.md) -- how to calculate error budget burn from an incident
-- [docs/runbooks/](docs/runbooks/) -- diagnostic playbooks (pod crash loops, OOMKill, high latency, DB connection exhaustion, ingress 502s, RDS connection limits)
-- [docs/incident-scenarios/](docs/incident-scenarios/) -- six scripted incidents to practice on, plus an instructor answer key
+- [docs/devops-vs-sre.md](docs/devops-vs-sre.md) -- who owns what, the change-vs-condition split, and the end-to-end path from alert to Datadog logs to `kubectl` to postmortem, told from both chairs
+- [docs/runbooks/](docs/runbooks/) -- diagnostic playbooks (pod crash loops, OOMKill, high latency, DB connection exhaustion, ingress 502s, RDS connection limits, stalled rollouts, config/secret drift)
+- [docs/incident-scenarios/](docs/incident-scenarios/) -- ten scripted incidents to practice on (six condition-driven, four change-driven), plus an instructor answer key with a DevOps and an SRE walkthrough for each

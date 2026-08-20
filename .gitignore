@@ -23,3 +23,8 @@ dist/
 .DS_Store
 Thumbs.db
 .claude
+# Chaos script backups (original ConfigMap/Secret/manifest values)
+.chaos-backup/
+
+# Cached Datadog RUM application ids/client tokens written by scripts/setup.sh
+.rum-apps.json

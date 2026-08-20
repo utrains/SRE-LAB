@@ -14,8 +14,20 @@ metadata:
 spec:
   hard:
     requests.cpu: "1"
+    # limits.cpu has to cover the worst case this namespace can legitimately
+    # reach, not just its steady state, or the quota silently blocks things
+    # the lab explicitly asks students to do:
+    #   backend  500m x 6   (hpa-backend.yaml maxReplicas)  = 3000m
+    #   frontend 200m x 2                                   =  400m
+    #   redis    200m x 1   (food-delivery only)            =  200m
+    #   + one surge pod during a RollingUpdate              =  500m
+    # At the old value of "2" a rolling update of food-delivery-backend could
+    # never create its surge pod (FailedCreate: exceeded quota), and no app
+    # could scale past 3 replicas, so cpu-spike.sh never demonstrated an HPA
+    # scale-out. requests.cpu stays at 1 -- requests are what the scheduler
+    # actually reserves, and 6 x 100m + 2 x 50m still fits well inside it.
+    limits.cpu: "4"
     requests.memory: 1Gi
-    limits.cpu: "2"
     limits.memory: 2Gi
     pods: "20"
 ---
@@ -38,4 +50,8 @@ spec:
         memory: 1Gi
       min:
         cpu: 50m
-        memory: 64Mi
+        # 16Mi, not 64Mi: this floor also bounds how low a deliberately-bad
+        # limit can be set, and a backend needs ~31Mi resident -- at a 64Mi
+        # floor, scripts/chaos/shrink-limits.sh could never actually starve
+        # one, so incident scenario 10 had nothing to reproduce.
+        memory: 16Mi

@@ -15,6 +15,24 @@
   watches each Service's endpoints to keep the target group in sync) --
   this is an ALB target-group -> pod problem, not an application-code
   problem -- the app never got the request.
+- **You may get no gateway error at all.** An ALB whose target group has
+  *some* healthy targets routes only to those; a target group with **zero**
+  healthy targets *fails open* and forwards to all of them anyway. So a
+  misrouted Ingress that points at a Service whose pods fail the health
+  check does not return 503 -- it returns whatever that wrong service says,
+  typically a 404. Read the response headers (`X-Powered-By`, `Server`)
+  before concluding the load balancer is broken: they tell you which of your
+  own services answered.
+
+```bash
+# Which target group, and are its targets healthy?
+aws elbv2 describe-target-groups --region us-east-1 \
+  --query "TargetGroups[?contains(TargetGroupName,'<app-prefix>')].TargetGroupArn" --output text
+aws elbv2 describe-target-health --region us-east-1 --target-group-arn <arn>
+```
+
+  There are no ALB metrics in Datadog in this lab (the AWS integration isn't
+  configured), so target health is only visible from the CLI or the console.
 
 ## Diagnostic commands
 
@@ -42,6 +60,11 @@ kubectl -n <namespace> get ingress <app> -o yaml
 - **Wrong port** in the Ingress or Service (`targetPort` not matching the
   container's actual listening port -- frontends in this lab listen on
   `8080`, backends on `4000`).
+- **Ingress pointed at the wrong Service entirely.** Both the Service and
+  the port exist, so the controller reconciles it happily and nothing
+  errors anywhere; users just get the wrong application. Compare the
+  Ingress against another app's, and see
+  `scripts/chaos/break-ingress.sh` / incident scenario 09.
 - **AWS Load Balancer Controller itself down or mid-restart** -- rare,
   but check `kubectl -n kube-system get pods -l app.kubernetes.io/name=aws-load-balancer-controller`
   if *every* app 502s simultaneously -- since all 5 apps share one ALB,

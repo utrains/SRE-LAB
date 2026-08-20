@@ -4,6 +4,16 @@
 # `kubectl create secret` + `helm install` commands.
 
 datadog:
+  # Global static tags, attached to every metric, event and service check the
+  # Agent and Cluster Agent emit. Pod-level telemetry already gets env/service/
+  # version from the tags.datadoghq.com/* pod labels (unified service tagging),
+  # but CLUSTER-level data -- kube-state-metrics, Kubernetes events -- is
+  # generated from the API server and never sees those labels. Without this,
+  # a query like kubernetes_state.deployment.replicas_unavailable{env:lab}
+  # returns no data and any monitor built on it silently never fires.
+  tags:
+    - "env:lab"
+
   apiKeyExistingSecret: datadog-secret # key: api-key, created by the student
   site: CHANGE_ME.datadoghq.com # required -- set to your trial org's site (see Organization Settings > API Keys in Datadog, or the "app.<site>" part of the URL once logged in)
 
@@ -16,6 +26,15 @@ datadog:
   logs:
     enabled: true
     containerCollectAll: true
+
+  # Kubernetes event collection from the API server. The chart already
+  # defaults this to true -- it's pinned here because it's what puts
+  # "Readiness probe failed", "OOMKilled", "BackOff" and "FailedScheduling"
+  # in front of you in Datadog (Events, and the Kubernetes overview) instead
+  # of only in `kubectl describe pod`. Several incident scenarios in
+  # docs/incident-scenarios/ depend on being able to see the event before
+  # you open a terminal.
+  collectEvents: true
 
   # Infra + container metrics
   processAgent:
