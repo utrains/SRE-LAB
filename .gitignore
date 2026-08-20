@@ -1,12 +1,13 @@
 # Terraform
 terraform/.terraform/
-terraform/*.tfstate
-terraform/*.tfstate.backup
+# Covers timestamped rollback copies too (terraform.tfstate.<epoch>.backup),
+# which terraform state rm/mv leaves behind -- these contain the full state,
+# RDS master password included.
+terraform/*.tfstate*
 terraform/*.tfplan
 terraform/nul
 terraform/terraform.tfvars
-*.tfstate
-*.tfstate.backup
+*.tfstate*
 
 # Node
 node_modules/

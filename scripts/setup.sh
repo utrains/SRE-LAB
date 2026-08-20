@@ -119,6 +119,62 @@ if [ -z "$PUBLIC_NS" ] || [ "$ROUTE53_NS" != "$PUBLIC_NS" ]; then
   esac
 fi
 
+# HTTPS certificate for the shared ALB. The lab uses one but never owns it
+# (see terraform/acm.tf for why), so make sure a usable one exists before
+# Terraform tries to look it up -- and create it here, outside Terraform, if
+# this is a first run on a fresh domain. Nothing below ever deletes a
+# certificate or its validation record; ACM needs that record to stay in
+# place to auto-renew.
+REGION_PRE=$(grep -E '^[[:space:]]*region[[:space:]]*=' "$TF_DIR/terraform.tfvars" 2>/dev/null | sed -E 's/.*"([^"]+)".*/\1/')
+REGION_PRE="${REGION_PRE:-us-east-1}"
+CERT_DOMAIN="*.${DNS_ZONE_NAME}"
+
+if [ -z "${TF_VAR_acm_certificate_arn:-}" ]; then
+  TF_VAR_acm_certificate_arn=$(aws acm list-certificates --region "$REGION_PRE" \
+    --certificate-statuses ISSUED \
+    --query "CertificateSummaryList[?DomainName=='${CERT_DOMAIN}'].CertificateArn | [0]" \
+    --output text 2>/dev/null || true)
+  [ "${TF_VAR_acm_certificate_arn:-}" = "None" ] && TF_VAR_acm_certificate_arn=""
+fi
+
+if [ -n "${TF_VAR_acm_certificate_arn:-}" ]; then
+  echo "    using existing ACM certificate for ${CERT_DOMAIN}"
+else
+  echo "    no ISSUED certificate for ${CERT_DOMAIN} -- requesting one (this is a one-off)"
+  TF_VAR_acm_certificate_arn=$(aws acm request-certificate --region "$REGION_PRE" \
+    --domain-name "$CERT_DOMAIN" --validation-method DNS \
+    --query CertificateArn --output text)
+
+  # The validation record only appears a few seconds after the request.
+  VAL_NAME=""; VAL_VALUE=""
+  for _ in $(seq 1 30); do
+    VAL_NAME=$(aws acm describe-certificate --region "$REGION_PRE" \
+      --certificate-arn "$TF_VAR_acm_certificate_arn" \
+      --query 'Certificate.DomainValidationOptions[0].ResourceRecord.Name' --output text 2>/dev/null || true)
+    VAL_VALUE=$(aws acm describe-certificate --region "$REGION_PRE" \
+      --certificate-arn "$TF_VAR_acm_certificate_arn" \
+      --query 'Certificate.DomainValidationOptions[0].ResourceRecord.Value' --output text 2>/dev/null || true)
+    if [ -n "$VAL_NAME" ] && [ "$VAL_NAME" != "None" ]; then break; fi
+    sleep 5
+  done
+
+  if [ -z "$VAL_NAME" ] || [ "$VAL_NAME" = "None" ]; then
+    echo "ACM never returned a DNS validation record for ${CERT_DOMAIN}." >&2
+    echo "Check the certificate in the ACM console: ${TF_VAR_acm_certificate_arn}" >&2
+    exit 1
+  fi
+
+  echo "    adding the DNS validation record to the hosted zone"
+  aws route53 change-resource-record-sets --hosted-zone-id "$ZONE_ID" \
+    --change-batch "{\"Changes\":[{\"Action\":\"UPSERT\",\"ResourceRecordSet\":{\"Name\":\"${VAL_NAME}\",\"Type\":\"CNAME\",\"TTL\":60,\"ResourceRecords\":[{\"Value\":\"${VAL_VALUE}\"}]}}]}" >/dev/null
+
+  echo "    waiting for ACM to validate it (usually 2-5 minutes)"
+  aws acm wait certificate-validated --region "$REGION_PRE" \
+    --certificate-arn "$TF_VAR_acm_certificate_arn"
+  echo "    certificate issued"
+fi
+export TF_VAR_acm_certificate_arn
+
 echo "==> 1/10 terraform apply"
 cd "$TF_DIR"
 terraform init -input=false

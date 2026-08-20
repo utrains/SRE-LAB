@@ -130,9 +130,9 @@ echo "https://ecommerce.$(cat .lab-domain)"
 
 Now visit each app in your browser (substituting your own domain). Each one
 is served over HTTPS with a real, browser-trusted certificate (a wildcard
-ACM cert, DNS-validated automatically during `setup.sh` -- no extra step or
-warning to click through), and plain HTTP requests redirect to HTTPS
-automatically:
+ACM cert that `setup.sh` finds, or requests and DNS-validates for you on a
+first run -- no extra step or warning to click through), and plain HTTP
+requests redirect to HTTPS automatically:
 
 - https://ecommerce.\<your-domain\>
 - https://banking.\<your-domain\>

@@ -48,8 +48,8 @@ output "lab_domain" {
 }
 
 output "acm_certificate_arn" {
-  description = "Validated ACM certificate ARN for the shared ALB's HTTPS listener, consumed by scripts/setup.sh"
-  value       = aws_acm_certificate_validation.wildcard.certificate_arn
+  description = "ACM certificate ARN for the shared ALB's HTTPS listener, consumed by scripts/setup.sh. Looked up or passed in -- never created here, see acm.tf"
+  value       = local.acm_certificate_arn
 }
 
 output "alb_controller_role_arn" {

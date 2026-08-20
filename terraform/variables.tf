@@ -108,3 +108,9 @@ variable "db_master_username" {
   type        = string
   default     = "labadmin"
 }
+
+variable "acm_certificate_arn" {
+  description = "ARN of an existing ISSUED ACM certificate covering *.<dns_zone_name>. scripts/setup.sh resolves (or requests) one and passes it in via TF_VAR_acm_certificate_arn; left empty, acm.tf looks one up by domain instead. The lab never creates or deletes certificates -- see the comment in acm.tf for why."
+  type        = string
+  default     = ""
+}

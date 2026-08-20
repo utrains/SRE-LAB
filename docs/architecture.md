@@ -60,10 +60,23 @@ traces from every app.
   a NodePort on every node -- one less hop, and Service objects for every
   app stay plain `ClusterIP` since the ALB talks to pods directly and
   the Ingress is the only externally-reachable object.
-- **HTTPS**: `terraform/acm.tf` requests a wildcard ACM certificate for
-  `*.<your-domain>`, DNS-validated against the same Route 53 hosted zone
-  `dns.tf` already looks up -- no extra prerequisite beyond what's already
-  required for plain HTTP. Each Ingress carries the resulting certificate
+- **HTTPS**: the lab *uses* a wildcard ACM certificate for
+  `*.<your-domain>` but deliberately does not *own* one.
+  `scripts/setup.sh`'s preflight looks for an ISSUED certificate covering
+  that domain and, on a first run, requests one and DNS-validates it against
+  the same Route 53 hosted zone `dns.tf` already looks up -- so there is
+  still no extra prerequisite, and it still happens in one command.
+  `terraform/acm.tf` only *reads* the certificate (a data source), and
+  nothing in the lab ever deletes it.
+
+  That split exists because of a real failure: a certificate for the whole
+  domain is usually shared with something outside the lab (a CloudFront
+  distribution, another load balancer). ACM refuses to delete a certificate
+  that is in use, so a Terraform-owned certificate makes `terraform destroy`
+  hang on `ResourceInUseException` and the teardown never finishes -- or, in
+  the worse case, succeeds and takes HTTPS down for an unrelated service.
+  Certificates are free, so owning their lifecycle buys nothing. Each
+  Ingress carries the resulting certificate
   ARN (`alb.ingress.kubernetes.io/certificate-arn`), a second listener on
   443 (`alb.ingress.kubernetes.io/listen-ports`), and
   `alb.ingress.kubernetes.io/ssl-redirect: '443'`, which makes the
