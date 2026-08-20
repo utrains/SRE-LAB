@@ -29,7 +29,7 @@ using the actual endpoints and metrics this lab's apps emit via `dd-trace`.
 
 | | |
 |---|---|
-| SLI | p95 latency of `POST /api/checkout`, measured via `trace.express.request.duration{service:ecommerce-backend,resource:POST /api/checkout}` |
+| SLI | p95 latency of `POST /api/checkout`, measured via `p95:trace.express.request{service:ecommerce-backend,resource:POST /api/checkout}` |
 | SLO | 99.5% of checkout requests complete in under 500ms, over a rolling 30 days |
 | SLA | If checkout latency exceeds 500ms on average for more than 1 hour in a billing period, affected merchants receive a 5% credit for that month |
 

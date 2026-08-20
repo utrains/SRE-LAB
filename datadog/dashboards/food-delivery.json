@@ -41,7 +41,7 @@
         "type": "timeseries",
         "requests": [
           {
-            "q": "p95:trace.express.request.duration{service:food-delivery-backend,$env}",
+            "q": "p95:trace.express.request{service:food-delivery-backend,$env}",
             "display_type": "line"
           }
         ]

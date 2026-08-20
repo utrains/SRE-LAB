@@ -41,7 +41,7 @@
         "type": "timeseries",
         "requests": [
           {
-            "q": "p95:trace.express.request.duration{service:support-tickets-backend,$env}",
+            "q": "p95:trace.express.request{service:support-tickets-backend,$env}",
             "display_type": "line"
           }
         ]

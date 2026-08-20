@@ -41,7 +41,7 @@
         "type": "timeseries",
         "requests": [
           {
-            "q": "p95:trace.express.request.duration{service:ecommerce-backend,$env}",
+            "q": "p95:trace.express.request{service:ecommerce-backend,$env}",
             "display_type": "line"
           }
         ]

@@ -41,7 +41,7 @@
         "type": "timeseries",
         "requests": [
           {
-            "q": "p95:trace.express.request.duration{$env} by {service}",
+            "q": "p95:trace.express.request{$env} by {service}",
             "display_type": "line"
           }
         ]

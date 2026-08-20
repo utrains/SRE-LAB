@@ -1,4 +1,4 @@
-require("./tracer");
+const tracer = require("./tracer");
 
 const express = require("express");
 const cors = require("cors");
@@ -25,7 +25,10 @@ app.get("/readyz", async (req, res) => {
   // `service:<app>-backend status:error`). It repeats once per failed probe,
   // every 10s, per the readinessProbe in k8s/deployment-backend.yaml.
   if (isDbDropActive()) {
-    console.error("readiness check failed: db connection dropped (chaos)");
+    const err = new Error("readiness check failed: db connection dropped (chaos)");
+    console.error(err.message);
+    const span = tracer.scope().active();
+    if (span) span.setTag("error", err);
     return res.status(503).json({ status: "not ready", reason: "db connection dropped (chaos)" });
   }
   try {
@@ -33,6 +36,8 @@ app.get("/readyz", async (req, res) => {
     res.json({ status: "ready" });
   } catch (err) {
     console.error("readiness check failed:", err.message);
+    const span = tracer.scope().active();
+    if (span) span.setTag("error", err);
     res.status(503).json({ status: "not ready", reason: err.message });
   }
 });

@@ -41,7 +41,7 @@
         "type": "timeseries",
         "requests": [
           {
-            "q": "p95:trace.express.request.duration{service:banking-backend,$env}",
+            "q": "p95:trace.express.request{service:banking-backend,$env}",
             "display_type": "line"
           }
         ]
