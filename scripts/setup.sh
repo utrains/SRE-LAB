@@ -125,7 +125,7 @@ fi
 # this is a first run on a fresh domain. Nothing below ever deletes a
 # certificate or its validation record; ACM needs that record to stay in
 # place to auto-renew.
-REGION_PRE=$(grep -E '^[[:space:]]*region[[:space:]]*=' "$TF_DIR/terraform.tfvars" 2>/dev/null | sed -E 's/.*"([^"]+)".*/\1/')
+REGION_PRE=$(grep -E '^[[:space:]]*region[[:space:]]*=' "$TF_DIR/terraform.tfvars" 2>/dev/null | sed -E 's/.*"([^"]+)".*/\1/' || true)
 REGION_PRE="${REGION_PRE:-us-east-1}"
 CERT_DOMAIN="*.${DNS_ZONE_NAME}"
 
