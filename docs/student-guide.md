@@ -323,7 +323,11 @@ them for the postmortems.
    why the incident mattered. Ninety seconds each, out loud, from memory.
 9. **Repeat** with a different incident scenario, then try triggering one
    yourself directly with the scripts in `scripts/chaos/` and writing your
-   own scenario for a classmate.
+   own scenario for a classmate. If you want one exercise that forces the
+   *entire* diagnostic path in one go -- dashboard, to a real APM trace, to
+   a real `kubectl` fix -- see the bonus
+   [11-scaling-into-a-wall.md](incident-scenarios/11-scaling-into-a-wall.md),
+   which isn't part of the core ten but is built specifically for that.
 10. **Close the detection gap you found.** Scenarios 07-10 each expose
     something none of the four imported monitors can see. Build one monitor
     that would have caught your incident (there are two ready-made queries

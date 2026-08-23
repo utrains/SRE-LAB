@@ -291,6 +291,7 @@ you're ready for either interview.
 | 08 The Rotated Password | A change | State drift between two systems of record | Running vs Ready, and partial capacity as silent risk |
 | 09 Green Dashboards, Angry Customers | A change | Edge routing, ALB target health, `describe ingress` | Detection that ends at the app boundary instead of at the user |
 | 10 The Tightened Limit | A change | Limits vs requests, quotas, `rollout history` | Same symptom, different cause: OOMKill from a ceiling that moved |
+| 11 (bonus) Scaling Into a Wall | Both -- a change that only shows itself under load | Reading an HPA, not just a Deployment; live-object vs manifest drift | Full path in one exercise: dashboard to APM trace to a real `kubectl` fix |
 
 ## Further reading
 

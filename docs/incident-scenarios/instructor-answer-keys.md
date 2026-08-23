@@ -38,8 +38,12 @@ scripts/chaos/inject-errors.sh ecommerce 0.2
 
 **Expected diagnosis path:** Student notices p95 latency and error rate
 both elevated on the ecommerce dashboard, confirms by placing an order
-(slow, sometimes fails), checks `GET /api/chaos` and sees
-`latencyMs: 4000, errorRate: 0.2`.
+(slow, sometimes fails), checks `rollout history` (clean -- nothing
+shipped), opens **APM > Traces**, sorts by duration, and reads the flame
+graph for the slowest checkout trace: the added time sits before/after the
+`postgres.query` span, inside the app's own handler, not inside the query
+itself -- consistent with an injected delay, not a database problem. Only
+then checks `GET /api/chaos` and sees `latencyMs: 4000, errorRate: 0.2`.
 
 **Fix:** `curl -X POST https://ecommerce.$(cat .lab-domain)/api/chaos/reset`
 
@@ -47,8 +51,14 @@ both elevated on the ecommerce dashboard, confirms by placing an order
 - Did they check the dashboard *before* guessing at code?
 - Did they distinguish "latency" from "error rate" as two separate
   signals, not one blob of "it's broken"?
-- Postmortem prevention idea should mention alerting thresholds or a
-  canary/synthetic check catching this before customers report it.
+- Did they actually open APM > Traces and read the flame graph, rather
+  than jumping straight to `/api/chaos`? A student who finds the chaos
+  endpoint first and the trace never gets asked to explain *where* the
+  time went -- press for it if they skip this.
+- Postmortem prevention idea should name something concrete and real --
+  an HPA `maxReplicas` headroom check, a synthetic/canary hitting checkout
+  every minute, or a monitor threshold tied to the SLO in
+  `docs/slo-sla-sli.md` -- not a generic "add more alerting."
 
 **Talking through it:**
 
@@ -60,7 +70,11 @@ both elevated on the ecommerce dashboard, confirms by placing an order
 > not zero. That distinction mattered, because a slow-but-working checkout
 > and a checkout that's actually failing a fifth of the time need
 > different follow-up. I reproduced it myself by placing a real order,
-> confirmed it matched what customers were describing, then checked our
+> confirmed it matched what customers were describing, checked rollout
+> history and saw nothing had shipped, then opened the trace for a slow
+> checkout request and read the flame graph -- the extra time was sitting
+> in the app's own handler, not inside the Postgres span, which ruled out
+> a database problem before I went any further. Only then did I check our
 > chaos-injection endpoint on that pod, which reported `latencyMs: 4000`
 > and `errorRate: 0.2`. That told me this was a known, resettable failure
 > mode, not a real code regression, so I reset it and confirmed both
@@ -703,21 +717,44 @@ scripts/chaos/break-ingress.sh food-delivery
 ```
 
 The script repoints the food-delivery Ingress rule from
-`food-delivery-frontend:80` to `food-delivery-backend:4000`. Allow one to
-two minutes for the AWS Load Balancer Controller to reconcile and for the
-target group's health checks to fail before students start.
+`food-delivery-frontend:80` to `food-delivery-backend:4000`. **Allow three
+to four minutes**, not one to two, for the fail-open state to stabilize
+before students start (see the timing note below) -- and expect a
+transient `504 Gateway Time-out` from `awselb/2.0` on *every* path,
+including `/api/*`, during the first minute or so. That's not a
+mid-incident data point worth showing students; it's the AWS Load Balancer
+Controller still standing up the new target group. Wait it out before
+handing the exercise over.
 
-**What actually happens** (verified against a live cluster -- the outcome is
-not the one you would predict): both the Service and the port exist, so the
-controller accepts the change without complaint and swings the shared ALB's
-target group onto the backend pods. The ALB health-checks `/`, which the
-Express backend has no route for, so it answers 404 and **every target is
-marked unhealthy**. An ALB whose target group contains no healthy targets
-*fails open* -- it forwards to all of them regardless -- so users do not get
-a clean 503. They get the backend's own `404 Cannot GET /`, with
-`X-Powered-By: Express` in the headers. `/api/*` paths keep returning 200
-throughout, because the backend genuinely is healthy; it is simply the wrong
-service to be answering a browser asking for the SPA.
+**What actually happens** (re-verified live on 2026-08-21, this Ingress
+uses `alb.ingress.kubernetes.io/target-type: ip`): repointing the rule does
+not swing the *existing* target group onto new targets -- the controller
+creates an entirely **new** target group bound to `food-delivery-backend`,
+registers the backend pod IPs into it, and only then deletes the old
+frontend target group's binding. Those new targets have to clear their own
+health checks (or fail them) before the ALB will route to them at all,
+which is why the client-facing symptom has two phases, not one: a brief
+`504` window while the new target group is still registering, then the
+`404`/fail-open behavior once it settles. `aws elbv2 describe-target-health`
+against the new target group's ARN (visible in
+`kubectl -n kube-system logs deployment/aws-load-balancer-controller | grep
+food-delivery`) confirms it directly: both targets `unhealthy`, reason
+`Target.ResponseCodeMismatch`, `"Health checks failed with these codes:
+[404]"`. Once that settles, the ALB *fails open* on a target group with no
+healthy targets -- it forwards to them regardless -- so users do not get a
+clean 503. They get the backend's own `404 Not Found`, with
+`X-Powered-By: Express` in the headers (confirmed: the actual response
+body/headers on this cluster show `Content-Type: text/html; charset=utf-8`
+and no `Cannot GET /`-style Express default text, so don't over-promise the
+exact body to students -- the header is the reliable tell, not the page
+copy). `/api/*` paths keep returning 200 throughout once settled, because
+the backend genuinely is healthy; it is simply the wrong service to be
+answering a browser asking for the SPA.
+
+The undo direction is faster and asymmetric: repointing back to the
+frontend recovered to a clean `200` in under 30 seconds in this test --
+worth knowing so you don't over-explain the "wait a few minutes" framing
+as symmetric in both directions when you fix it live in front of a class.
 
 Nothing in Kubernetes is unhealthy: all pods `1/1 Running`, all Services
 with endpoints. And **nothing in the dashboards moves at all** -- not even
@@ -931,3 +968,152 @@ kubectl -n support-tickets rollout undo deployment/support-tickets-backend
 > time. The same sweep against ecommerce during checkout hours is an
 > outage on our primary SLI, and I'd rather make that argument from a near
 > miss than from a postmortem.
+
+---
+
+## 11 (bonus). Scaling Into a Wall (ecommerce)
+
+Not part of the core ten -- see the note at the top of
+`docs/incident-scenarios/11-scaling-into-a-wall.md`. Use this one
+specifically when you want a scenario that forces the *entire* path in one
+exercise: dashboard, to a real APM trace, to a real `kubectl` fix. It's
+also the only scenario that puts the `HorizontalPodAutoscaler` itself in
+scope, rather than the Deployment it manages.
+
+**Verified live against a real cluster on 2026-08-21 -- numbers below are
+measured, not guessed.** The original caution here was to load-test before
+trusting this scenario; that's now done, and it reproduces fast and
+reliably, but with one real trap worth knowing about first.
+
+**The pod-count trap:** `cpu-spike.sh` blocks whichever single pod the ALB
+round-robins the call to. Spiking **both** `ecommerce-backend` pods at the
+same time (e.g. by port-forwarding directly to each and firing concurrent
+90s spikes to guarantee coverage) leaves *zero* healthy pods to serve
+traffic for the duration -- both then fail their liveness probe
+(`context deadline exceeded` on `/healthz`, since the busy-loop blocks the
+event loop entirely and the probe can't get through either) and kubelet
+restarts both containers around 55-65s in. The HPA signal reproduces
+perfectly either way, but a real, unintended pod restart is a second,
+noisier incident layered on top of the one you meant to run -- confusing
+if a student notices `RESTARTS` climbing and goes looking for
+`OOMKilled`/crash-loop causes instead of the capacity ceiling. **Only spike
+one pod at a time**, and keep the other one clear to absorb traffic, so the
+lesson stays "no room to scale," not "the app also crashed."
+
+**Setup (run before students start):**
+```bash
+# Cap the HPA well below the traffic you're about to generate. This is a
+# live edit to the cluster object, not to apps/ecommerce/k8s/hpa-backend.yaml
+# in the repo -- that drift (live object != checked-in manifest) is itself
+# part of the lesson.
+kubectl -n ecommerce patch hpa ecommerce-backend --type=merge -p '{"spec":{"maxReplicas":2}}'
+
+# Generate load against ONE pod only (see the trap above) -- pick a pod
+# name and port-forward directly to it rather than going through the ALB,
+# so you know exactly which pod is loaded and the other stays healthy:
+POD=$(kubectl -n ecommerce get pods -l app=ecommerce-backend -o jsonpath='{.items[0].metadata.name}')
+kubectl -n ecommerce port-forward "pod/$POD" 14001:4000 &
+sleep 2
+curl -sf -X POST localhost:14001/api/chaos/cpu-spike -H "Content-Type: application/json" -d '{"seconds":60}'
+```
+
+Measured timing on this cluster: with one pod pegged at its 500m CPU
+limit, `kubectl get hpa` showed utilization at 86%/70% within the first
+15s HPA sync cycle and pinned at several hundred percent by the second --
+`REPLICAS` stayed locked at `2/2` throughout, which is the actual
+teaching moment. It's fast enough that a single 60s spike, held while
+students work through the diagnosis, is plenty -- no need for a long
+repeating loop. If your cluster's baseline traffic or node sizing differs,
+re-confirm timing the same way before running it with a class.
+
+**What actually happens:** `ecommerce-backend`'s `HorizontalPodAutoscaler`
+is pinned at `maxReplicas: 2` instead of the checked-in `6`. Under real
+load, CPU utilization per pod sits above the 70% target, `kubectl get hpa`
+shows `REPLICAS` stuck at `2/2` with `TARGETS` still over 100%, and every
+request queues behind more work than two pods can drain -- so p95 climbs
+and *stays* climbed, with error rate flat, for as long as the load holds.
+Unlike Incident 1, this signature scales with real traffic: it gets worse
+at peak and eases off at quiet moments, rather than being a flat injected
+delay.
+
+**Expected diagnosis path:**
+1. Dashboard: p95 up, error rate flat -- same first read as Incident 1.
+2. `rollout history deployment/ecommerce-backend` is clean -- no Deployment
+   change, so don't keep looking there.
+3. APM trace flame graph: added time is spread across the handler, not
+   concentrated in one child span (no dominant `postgres.query` outlier) --
+   consistent with a request waiting on a busy process, not blocked by one
+   slow call.
+4. `kubectl -n ecommerce top pods`: **every** pod is hot, not just one --
+   rules out a single misbehaving instance.
+5. `kubectl -n ecommerce get hpa ecommerce-backend`: `REPLICAS` pinned at
+   the ceiling, `TARGETS` still above the 70% goal. This is the line that
+   actually names the cause.
+6. Diff against `apps/ecommerce/k8s/hpa-backend.yaml`: live `maxReplicas`
+   (2) doesn't match the repo (6) -- confirms this was a live, undocumented
+   change.
+
+**Fix:**
+```bash
+kubectl -n ecommerce patch hpa ecommerce-backend --type=merge -p '{"spec":{"maxReplicas":6}}'
+```
+Then confirm `REPLICAS` actually climbs past 2 in `kubectl get hpa -w`, and
+p95 comes back down on the dashboard a minute or two later. The better
+long-term fix is reapplying `apps/ecommerce/k8s/hpa-backend.yaml` from the
+repo rather than leaving a one-off `patch` as the live source of truth --
+worth asking students to name that distinction unprompted.
+
+**Grading -- listen for:**
+- Did they compare this against Incident 1's signature and notice it's
+  *load-dependent* rather than constant -- that's the tell that points
+  above the Deployment instead of into it?
+- Did they read the trace and correctly conclude "spread across the
+  handler" means saturation, not one bad call?
+- Did they check the HPA at all, or stop at `top pods` and start guessing
+  at code? A student who never runs `kubectl get hpa` in this scenario
+  hasn't found the actual cause, even if they correctly diagnose
+  "capacity."
+- Did they catch that the live HPA object had drifted from the checked-in
+  manifest, and name that as its own finding -- not just "I raised
+  maxReplicas"?
+- Postmortem should treat a static `maxReplicas` as a number that needs
+  revisiting as traffic grows, not a value set once and forgotten -- same
+  category of lesson as Incident 10, one layer up the stack.
+
+**Talking through it -- the DevOps version:**
+
+> Checkout got slow again, and my first instinct was that this was the
+> Black Friday incident repeating, but the shape was different -- no error
+> rate, and it tracked traffic instead of sitting flat. Rollout history was
+> clean, so nothing had shipped to the Deployment. The trace told me the
+> extra time wasn't concentrated in one call -- it was spread across the
+> whole handler, which reads like a process with too much queued work, not
+> a slow dependency. `top pods` showed every pod running hot, not one
+> outlier, which ruled out a single bad instance. That pushed me up one
+> layer, to the HPA, and `kubectl get hpa` showed replicas pinned at 2 with
+> utilization still well above target -- it had been maxed out for a while
+> and had nowhere left to go. Diffing against the manifest in the repo
+> showed maxReplicas was checked in as 6; someone had patched the live
+> object directly and it never made it back into version control. I raised
+> the ceiling back to 6, confirmed replica count actually climbed, and p95
+> came down within a couple of minutes. The real issue isn't the number --
+> it's that a live edit to an autoscaler can silently outlive the manifest
+> that's supposed to describe it, with nothing that would have told us it
+> drifted until traffic pushed against it.
+
+**Talking through it -- the SRE version:**
+
+> This one cost real budget, unlike the near-misses in scenarios 7 and 8 --
+> checkout was genuinely slow for every customer for as long as the ceiling
+> held, and it got worse during exactly the traffic we care most about
+> retaining. What I want to flag is that nothing paged. Our latency monitor
+> would eventually fire once p95 crossed threshold, but there's no monitor
+> on the HPA itself -- nothing watches "replicas pinned at max while
+> utilization is still over target," which is the earliest, cleanest signal
+> that we're capacity-constrained, well before it shows up as user-facing
+> latency. A capacity ceiling that's correct today and wrong in three
+> months isn't a one-time config mistake, it's a thing that needs a
+> standing check, the same way we'd revisit an SLO. The prevention item
+> isn't "raise the number" -- it's alerting on the autoscaler being pinned,
+> and a periodic review of whether `maxReplicas` still has headroom over
+> observed peak traffic.
