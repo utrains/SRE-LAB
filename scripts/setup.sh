@@ -407,8 +407,7 @@ echo "==> 9/10 install metrics-server + the AWS Load Balancer Controller, apply 
 # metrics-server serves the metrics.k8s.io API. Without it `kubectl top` fails
 # and -- more importantly for this lab -- every HorizontalPodAutoscaler sits at
 # `cpu: <unknown>/70%` forever and can never scale, which makes
-# scripts/chaos/cpu-spike.sh's whole point (watch the HPA scale out) impossible
-# to demonstrate. EKS does not ship it by default.
+# HPA status and `kubectl top` require this API. EKS does not ship it by default.
 echo "    installing metrics-server"
 kubectl apply -f "https://github.com/kubernetes-sigs/metrics-server/releases/download/${METRICS_SERVER_VERSION}/components.yaml" >/dev/null
 kubectl -n kube-system rollout status deployment/metrics-server --timeout=180s

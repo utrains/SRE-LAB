@@ -1,0 +1,8 @@
+{
+  "name": "[SRE Lab] Deployment has unavailable replicas",
+  "type": "metric alert",
+  "query": "max(last_5m):max:kubernetes_state.deployment.replicas_unavailable{env:lab} by {kube_namespace,kube_deployment} >= 1",
+  "message": "{{#is_alert}}{{kube_namespace.name}}/{{kube_deployment.name}} has unavailable replicas. Review the SRE Lab Scenario Signals dashboard and Kubernetes events.{{/is_alert}}\n{{#is_recovery}}All replicas are available again.{{/is_recovery}}",
+  "tags": ["env:lab", "team:sre-lab"],
+  "options": {"thresholds": {"critical": 1}, "notify_no_data": false, "evaluation_delay": 60, "renotify_interval": 0}
+}

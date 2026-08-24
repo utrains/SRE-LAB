@@ -67,7 +67,7 @@ this lab:
 | `Readiness probe failed: HTTP probe failed with statuscode: 503` | The process is up but a dependency check fails -- see [config-and-secret-drift.md](config-and-secret-drift.md) | Fix the dependency or the credential |
 | `Last State: Terminated, Reason: OOMKilled` + `Back-off restarting` | The memory limit is below what the process needs | Check whether the *limit* moved or *usage* grew -- see [oomkill.md](oomkill.md) |
 
-The distinction in that last row is the whole of scenario 10: an OOMKill
+The distinction in that last row is central to scenario 3: an OOMKill
 from a limit someone tuned down looks identical to an OOMKill from a leak,
 and `rollout history` is what tells them apart.
 

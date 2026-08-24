@@ -6,8 +6,7 @@
 # backend needs roughly 31Mi resident once Express, pg and dd-trace are
 # loaded, so 20Mi is below what it takes just to start: new pods are
 # OOMKilled during startup (exit 137) and land in CrashLoopBackOff, while the
-# old pods keep serving. Same symptom as memory-spike.sh, opposite cause --
-# nothing leaked, the ceiling moved.
+# old pods keep serving. Nothing leaked; the resource ceiling moved.
 #
 # The value matters more than it looks. Measured on this lab: 64Mi and 32Mi
 # both leave the process running (32Mi only kills it occasionally, since

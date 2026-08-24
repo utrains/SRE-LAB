@@ -93,10 +93,11 @@ Give the AWS Load Balancer Controller a minute or two to reconcile, then:
   kubectl -n ${NS} describe ingress ${ING}
   kubectl -n kube-system logs deployment/aws-load-balancer-controller --tail=50 | grep ${APP}
 
-Datadog will NOT show you this one. Every dashboard widget is scoped to
-${APP}-backend, which is healthy and still serving -- its throughput even rises,
-because the ALB's health checks now hit it. That absence of signal is the
-lesson. Target health lives in AWS, not Datadog:
+Datadog APM shows the backend unexpectedly receiving GET / and returning 404.
+Open Trace Explorer and filter service:${APP}-backend resource_name:"GET /";
+confirm http.status_code:404 on the spans. The Scenario Signals dashboard and
+Unexpected backend root traffic monitor use the same real trace metric. ALB
+target health still lives in AWS:
   aws elbv2 describe-target-health --region us-east-1 --target-group-arn <arn>
 See docs/runbooks/ingress-502s.md.
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Clears all chaos state (latency, error rate, db-drop, memory) on an app's
+# Clears all supported chaos state on an app's
 # backend. Does not undo kill-random-pod, scale-to-zero, or bad-deploy --
 # those are reverted with plain kubectl commands (printed when you run them).
 #

@@ -17,25 +17,19 @@ kubectl -n <namespace> top pods
 kubectl -n <namespace> get pods
 
 # In Datadog APM: open the service's trace list, sort by duration desc,
-# and look at the flame graph for the slowest resource (endpoint). Is the
-# time spent in the app, or in the "postgres.query" child span?
+# and look at the flame graph for the slowest resource (endpoint).
 ```
 
-If the slow span is the Postgres query itself, this is a database
-performance problem (missing index, lock contention, or the instance
-itself under load -- cross-check `rds-connection-limit.md`). If the slow
-time is in the app before/after the DB call, look at what else that
-request handler does (e.g. ecommerce's `checkout` endpoint calls a
-simulated payment processor with an artificial 150-350ms delay by design
+Use the trace to decide whether time is spent in application code or
+workload behavior. In this scenario, look at what the request handler does
+(for example, ecommerce's `checkout` endpoint calls a
+simulated payment processor with a 150-350ms delay by design
 -- see `apps/ecommerce/backend/src/routes.js`).
 
 ## Common root causes in this lab
 
 - **Injected latency** via the chaos hook (`POST /api/chaos/latency`) --
   check `GET /api/chaos` on the pod to see current chaos state.
-- **CPU-blocking spike** (`POST /api/chaos/cpu-spike`) -- this blocks the
-  Node.js event loop entirely, so *every* request that pod serves gets
-  slow simultaneously, not just one endpoint.
 - **Real downstream slowness** -- a busy shared RDS instance, or simply
   too much traffic for the current replica count (see HPA in
   `apps/<app>/k8s/hpa-backend.yaml`).
@@ -70,6 +64,4 @@ simulated payment processor with an artificial 150-350ms delay by design
 
 ```bash
 scripts/chaos/inject-latency.sh <app> 3000   # 3s of added latency
-# or, to spike CPU across every request on one pod:
-scripts/chaos/cpu-spike.sh <app> 15
 ```

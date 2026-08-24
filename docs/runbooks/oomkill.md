@@ -22,8 +22,8 @@ kubectl -n <namespace> top pod <pod>
 
 ## Common root causes in this lab
 
-- **Injected memory spike** via the chaos hook (`POST /api/chaos/memory-spike`),
-  which allocates and retains Buffers in the Node.js process until reset.
+- **A resource limit reduced below measured workload requirements**, which
+  causes Kubernetes to terminate the container during startup or requests.
 - Every backend's container `resources.limits.memory` is set to `256Mi`
   (see `apps/<app>/k8s/deployment-backend.yaml`) -- deliberately low, so
   this is easy to trigger and observe in the lab. In a real service, this
@@ -32,14 +32,10 @@ kubectl -n <namespace> top pod <pod>
 
 ## Fix
 
-1. If it's the chaos hook, reset it -- new pods won't retain the injected
-   memory:
+1. If the lab limit was reduced, restore the saved request and limit:
    ```bash
-   curl -X POST https://<app>.$(cat .lab-domain)/api/chaos/reset
+   scripts/chaos/shrink-limits.sh <app> --undo
    ```
-   (Kubernetes already restarted the killed pod automatically; this just
-   stops it from happening again on the new pod if you re-trigger the
-   endpoint.)
 2. If it's a real leak, a restart is a temporary mitigation, not a fix --
    `kubectl -n <namespace> rollout restart deployment/<app>-backend` buys
    time while someone finds the leaking code path.
@@ -63,7 +59,7 @@ kubectl -n <namespace> top pod <pod>
 ## Reproduce this in the lab
 
 ```bash
-scripts/chaos/memory-spike.sh <app> 300
-# 300MB requested against a 256Mi limit will OOMKill within moments; watch:
+scripts/chaos/shrink-limits.sh <app>
+# The script applies a deliberately unsafe 20Mi limit; watch:
 kubectl -n <app> get pods -w
 ```

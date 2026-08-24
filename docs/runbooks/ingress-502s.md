@@ -64,7 +64,7 @@ kubectl -n <namespace> get ingress <app> -o yaml
   the port exist, so the controller reconciles it happily and nothing
   errors anywhere; users just get the wrong application. Compare the
   Ingress against another app's, and see
-  `scripts/chaos/break-ingress.sh` / incident scenario 09.
+  `scripts/chaos/break-ingress.sh` / incident scenario 4.
 - **AWS Load Balancer Controller itself down or mid-restart** -- rare,
   but check `kubectl -n kube-system get pods -l app.kubernetes.io/name=aws-load-balancer-controller`
   if *every* app 502s simultaneously -- since all 5 apps share one ALB,
@@ -75,8 +75,7 @@ kubectl -n <namespace> get ingress <app> -o yaml
 
 1. If the Service has zero endpoints because pods aren't ready, that's
    really a different runbook depending on *why* they're not ready --
-   check `pod-crash-loop.md` or `db-connection-exhaustion.md` for the
-   pod-level root cause.
+   check `pod-crash-loop.md` and the pod events for the workload cause.
 2. If replicas were scaled to 0 (deliberately or by accident):
    ```bash
    kubectl -n <namespace> scale deployment/<app>-frontend --replicas=2
@@ -96,7 +95,7 @@ kubectl -n <namespace> get ingress <app> -o yaml
 ## Reproduce this in the lab
 
 ```bash
-scripts/chaos/scale-to-zero.sh <namespace> <app>-frontend
-curl -o /dev/null -w "%{http_code}\n" https://<app>.$(cat .lab-domain)/    # 503
-kubectl -n <namespace> scale deployment/<app>-frontend --replicas=2
+scripts/chaos/break-ingress.sh <app>
+curl -o /dev/null -w "%{http_code}\n" https://<app>.$(cat .lab-domain)/
+scripts/chaos/break-ingress.sh <app> --undo
 ```

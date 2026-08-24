@@ -1,0 +1,8 @@
+{
+  "name": "[SRE Lab] Unexpected backend root traffic",
+  "type": "metric alert",
+  "query": "sum(last_5m):sum:trace.express.request.hits.by_http_status{env:lab,http.status_code:404,resource_name:get_/} by {service}.as_count() >= 2",
+  "message": "{{#is_alert}}{{service.name}} is receiving repeated GET / requests. In this lab, backend root traffic can indicate an Ingress misroute. Confirm HTTP status in APM, then trace ALB to Ingress to Service.{{/is_alert}}\n{{#is_recovery}}Backend root traffic has stopped.{{/is_recovery}}",
+  "tags": ["env:lab", "team:sre-lab"],
+  "options": {"thresholds": {"critical": 2}, "notify_no_data": false, "evaluation_delay": 60, "renotify_interval": 0}
+}

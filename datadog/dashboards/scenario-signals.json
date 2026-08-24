@@ -1,0 +1,14 @@
+{
+  "title": "SRE Lab Scenario Signals",
+  "description": "Datadog-first entry point for the five DevOps incident scenarios. Kubernetes events are inspected in Event Management and 404 status is confirmed in APM Trace Explorer.",
+  "layout_type": "ordered",
+  "template_variables": [{"name": "env", "prefix": "env", "default": "lab"}],
+  "widgets": [
+    {"definition":{"type":"timeseries","title":"Unavailable Replicas","requests":[{"q":"max:kubernetes_state.deployment.replicas_unavailable{$env} by {kube_namespace,kube_deployment}","display_type":"line"}]}},
+    {"definition":{"type":"timeseries","title":"Available Replicas","requests":[{"q":"max:kubernetes_state.deployment.replicas_available{$env} by {kube_namespace,kube_deployment}","display_type":"line"}]}},
+    {"definition":{"type":"timeseries","title":"Container Restarts","requests":[{"q":"sum:kubernetes.containers.restarts{$env} by {kube_namespace,kube_deployment}.as_count()","display_type":"bars"}]}},
+    {"definition":{"type":"timeseries","title":"Memory Usage and Limits","requests":[{"q":"avg:kubernetes.memory.usage{$env} by {kube_deployment}","display_type":"line"},{"q":"avg:kubernetes.memory.limits{$env} by {kube_deployment}","display_type":"line"}]}},
+    {"definition":{"type":"timeseries","title":"Backend GET / HTTP 404 Responses","requests":[{"q":"sum:trace.express.request.hits.by_http_status{$env,http.status_code:404,resource_name:get_/} by {service}.as_rate()","display_type":"bars"}]}},
+    {"definition":{"type":"timeseries","title":"Backend p95 Latency","requests":[{"q":"p95:trace.express.request{$env} by {service}","display_type":"line"}]}}
+  ]
+}
