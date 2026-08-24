@@ -364,10 +364,11 @@ happen, what was actually done, and what came of it.
 
 ### The checkout failure on an ecommerce platform
 
-**Situation.** I was on call for the backend team of an ecommerce
-platform. Mid-afternoon on a weekday, our error rate monitor paged for
-the checkout service, specifically two actions: adding to cart, and
-completing checkout. Everything else on the site was working normally.
+**Situation.** I was on our on-call rotation for the week, covering
+every service we run, not just one team's. Mid-afternoon on a weekday
+I got paged for a high error rate on the ecommerce platform's checkout
+service, specifically two actions: adding to cart, and completing
+checkout. Everything else on the site was working normally.
 
 **Task.** Figure out why two specific customer actions were failing
 completely, on every attempt, while the rest of the platform was
@@ -390,9 +391,10 @@ through the same review a code change gets.
 
 ### The memory climb that never became an outage, on a food delivery platform
 
-**Situation.** I was reviewing dashboards for a food delivery backend
-when a memory saturation alert fired. No customer had reported anything,
-and nothing else on the dashboard had moved.
+**Situation.** I was on call that week, doing a routine check across
+our dashboards, when a memory saturation alert fired on a food
+delivery backend. No customer had reported anything, and nothing else
+on the dashboard had moved.
 
 **Task.** Work out whether this was actually heading toward an outage,
 and if so, stop it before it turned into one.
@@ -413,9 +415,10 @@ rather than relying on catching the symptom again next time.
 
 ### The balance and transfer outage on a banking platform
 
-**Situation.** I got paged for an error rate alert on a banking service.
-Customers could log in without any problem, but checking a balance or
-sending a transfer failed every time.
+**Situation.** I was on call that week when I got paged for an error
+rate alert on a banking service. Customers could log in without any
+problem, but checking a balance or sending a transfer failed every
+time.
 
 **Task.** Determine why authentication worked while every account
 operation failed, and get it fixed quickly given this was a financial
@@ -436,9 +439,9 @@ through the same review, not a direct session against the database.
 
 ### The quiet pod restarts on a student services platform
 
-**Situation.** A pod restart monitor fired for a student portal service.
-No user noticed anything, since the service kept responding the entire
-time.
+**Situation.** I was on call that week when a pod restart monitor
+fired for a student portal service. No user noticed anything, since
+the service kept responding the entire time.
 
 **Task.** Work out whether this restart pattern was actually serious,
 and fix the cause before it escalated into something customer-facing.
@@ -462,9 +465,10 @@ changed, not set from a spreadsheet.
 
 ### The ticket creation failure on a support platform
 
-**Situation.** An error rate alert fired on a support ticketing service.
-Agents could still view and search every existing ticket without any
-issue, but nobody could file a new one.
+**Situation.** I was on call that week when an error rate alert fired
+on a support ticketing service. Agents could still view and search
+every existing ticket without any issue, but nobody could file a new
+one.
 
 **Task.** Find out why writes specifically were failing while every read
 kept working, and restore ticket creation before it delayed customer
