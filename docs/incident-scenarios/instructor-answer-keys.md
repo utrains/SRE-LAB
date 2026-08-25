@@ -171,7 +171,7 @@ DNS and ALB are reachable and workloads are healthy, but users receive `404 Cann
 
 ### Datadog
 
-In **APM > Trace Explorer**, search `service:food-delivery-backend env:lab @http.status_code:404 resource_name:"GET /"`. A matching trace shows service `food-delivery-backend`, resource `GET /`, and status 404. Use **SRE Lab Scenario Signals** and **[SRE Lab] Unexpected backend root traffic**, based on `trace.express.request.hits.by_http_status{http.status_code:404,resource_name:get_/}`. Confirm healthy pods in Kubernetes Explorer. ALB target health still requires AWS inspection.
+Generate repeated requests to the broken public URL, wait two to five minutes, then open **APM > Trace Explorer** with **Past 30 Minutes** and search `service:food-delivery-backend env:lab @http.status_code:404`. Open the newest result and confirm service `food-delivery-backend`, resource `GET /`, and status 404. If the status-filtered query is initially empty, remove the status filter to confirm trace ingestion before retrying it. The custom dashboard widget and monitor are optional summaries. Confirm healthy pods in Kubernetes Explorer; ALB target health still requires AWS inspection.
 
 ### Root Cause
 

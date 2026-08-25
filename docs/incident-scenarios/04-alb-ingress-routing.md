@@ -14,6 +14,17 @@ Run this from the repository root against your own lab environment:
 
 The script saves the current Ingress backend and changes the live route. Allow one or two minutes for the AWS Load Balancer Controller to reconcile before testing the public URL.
 
+Generate enough requests for APM to display the failure:
+
+```bash
+for i in {1..10}; do
+  curl -s -o /dev/null -w '%{http_code}\n' \
+    "https://food-delivery.$(cat .lab-domain)/"
+done
+```
+
+Expected output: repeated HTTP `404` responses. Allow two to five minutes for the traces to appear in Datadog.
+
 ## Situation
 
 Users receive HTTP 404 from the food delivery home page even though the Kubernetes workloads report healthy.
@@ -31,11 +42,11 @@ Users receive HTTP 404 from the food delivery home page even though the Kubernet
 
 ## Start With Datadog
 
-1. Go to **Dashboards > SRE Lab Scenario Signals** and set the time range to **Past 30 Minutes**.
-2. Inspect **Backend GET / HTTP 404 Responses** for `service:food-delivery-backend`. This widget uses `trace.express.request.hits.by_http_status` filtered by `http.status_code:404` and metric-normalized `resource_name:get_/`.
-3. Go to **Monitors > Manage Monitors**, search `[SRE Lab] Unexpected backend root traffic`, open it, and expand the `food-delivery-backend` group.
+1. Go to **APM > Trace Explorer** and set the time range to **Past 30 Minutes**. If the page opens in Live Search, switch to the historical trace view so the generated requests remain visible.
+2. In the search bar, enter `service:food-delivery-backend env:lab @http.status_code:404`, then run the search. If no result appears yet, remove `@http.status_code:404`, confirm that backend traces exist, wait two to five minutes, and add the status filter again.
+3. Open the newest matching trace. Confirm that the service is `food-delivery-backend`, the resource is `GET /`, and the HTTP status is `404`. This proves that public root traffic reached the backend instead of the frontend.
 
-This repository does not install the Datadog AWS integration, so ALB listeners, rules, and target health are not available in Datadog. Record the 404 trace timestamp and backend pod, then continue with AWS CLI and Kubernetes.
+The custom dashboard widget and monitor are optional summaries; students do not need them to find this issue. This repository does not install the Datadog AWS integration, so ALB listeners, rules, and target health are not available in Datadog. Record the 404 trace timestamp and backend pod, then continue with AWS CLI and Kubernetes.
 
 ## Troubleshooting
 
