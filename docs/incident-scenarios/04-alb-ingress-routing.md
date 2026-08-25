@@ -31,7 +31,14 @@ Users receive HTTP 404 from the food delivery home page even though the Kubernet
 
 ## Start With Datadog
 
-Open **SRE Lab Scenario Signals**, then APM Trace Explorer. Filter `service:food-delivery-backend env:lab @http.status_code:404`. The **Unexpected backend root traffic** monitor uses `trace.express.request.hits.by_http_status` with `http.status_code:404` and the metric-normalized `resource_name:get_/`. This is a backend APM signal, not ALB telemetry. Target health still requires AWS inspection.
+1. Open **Dashboards > SRE Lab Scenario Signals** and set the time range to the last 15 minutes.
+2. Inspect **Backend GET / HTTP 404 Responses** for `service:food-delivery-backend`. This widget uses `trace.express.request.hits.by_http_status` filtered by `http.status_code:404` and metric-normalized `resource_name:get_/`.
+3. Open **Monitors > Manage Monitors > [SRE Lab] Unexpected backend root traffic** and expand the `food-delivery-backend` group.
+4. Open **APM > Trace Explorer** and search `service:food-delivery-backend env:lab @http.status_code:404 resource_name:"GET /"`. Set the time range to the last 15 minutes.
+5. Open a matching trace. In the trace header verify service `food-delivery-backend`, resource `GET /`, and HTTP status 404. In the Infrastructure tab record the pod and Kubernetes tags.
+6. Open **Infrastructure > Kubernetes > Pods**, filter `kube_namespace:food-delivery`, and confirm frontend and backend pods remain Running and Ready.
+
+This repository does not install the Datadog AWS integration, so ALB listeners, rules, and target health are not available in Datadog. Record the 404 trace timestamp and backend pod, then continue with AWS CLI and Kubernetes.
 
 ## Troubleshooting
 

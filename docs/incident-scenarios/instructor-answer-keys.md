@@ -14,7 +14,7 @@ New pods show `ErrImagePull` or `ImagePullBackOff`, unavailable replicas increas
 
 ### Datadog
 
-Use **SRE Lab Scenario Signals**, `kubernetes_state.deployment.replicas_unavailable{kube_deployment:banking-backend}`, the **[SRE Lab] Deployment has unavailable replicas** monitor, and Kubernetes image-pull events collected by the Cluster Agent.
+Use **Dashboards > SRE Lab Scenario Signals** with `kube_namespace:banking kube_deployment:banking-backend`, `kubernetes_state.deployment.replicas_unavailable`, and **[SRE Lab] Deployment has unavailable replicas**. In **Infrastructure > Kubernetes > Deployments**, inspect the banking backend and newest ReplicaSet. In **Events > Explorer**, use the banking namespace/workload tags and find the image-pull event collected by the Cluster Agent.
 
 ### Root Cause
 
@@ -58,7 +58,7 @@ Validate image existence before deployment and preserve rollback history.
 
 ### Situation
 
-The banking ConfigMap changed `PORT` from 4000 to 4001 and restarted the Deployment. Probes still check 4000.
+The student portal ConfigMap changed `PORT` from 4000 to 4001 and restarted the Deployment. Probes still check 4000.
 
 ### Symptoms
 
@@ -66,11 +66,11 @@ New pods fail probes, restart, and prevent rollout completion while old pods may
 
 ### Datadog
 
-Use `kubernetes_state.deployment.replicas_unavailable`, `kubernetes.containers.restarts`, their two monitors, probe-failure events, and `service:banking-backend` logs.
+Use `kubernetes_state.deployment.replicas_unavailable`, `kubernetes.containers.restarts`, their two monitors, probe-failure events, and `service:student-portal-backend` logs. In Scenario Signals filter `kube_namespace:student-portal kube_deployment:student-portal-backend`; in Log Explorer search `service:student-portal-backend`; in Kubernetes Explorer inspect the newest student portal backend pods.
 
 ### Root Cause
 
-`banking-backend-config` supplies `PORT=4001`, but readiness and liveness probes target 4000.
+`student-portal-backend-config` supplies `PORT=4001`, but readiness and liveness probes target 4000.
 
 ### Troubleshooting Path
 
@@ -79,13 +79,13 @@ Datadog -> rollout -> pods -> describe/events -> logs -> ConfigMap -> probes.
 ### Commands
 
 ```bash
-./scripts/chaos/break-config.sh banking
-kubectl rollout status deployment/banking-backend -n banking --timeout=60s
-kubectl get pods -n banking
-kubectl describe pod <new-pod> -n banking
-kubectl logs <new-pod> -n banking
-kubectl describe configmap banking-backend-config -n banking
-kubectl get deployment banking-backend -n banking -o yaml
+./scripts/chaos/break-config.sh student-portal
+kubectl rollout status deployment/student-portal-backend -n student-portal --timeout=60s
+kubectl get pods -n student-portal
+kubectl describe pod <new-pod> -n student-portal
+kubectl logs <new-pod> -n student-portal
+kubectl describe configmap student-portal-backend-config -n student-portal
+kubectl get deployment student-portal-backend -n student-portal -o yaml
 ```
 
 ### Important Clues
@@ -95,7 +95,7 @@ Logs say `listening on 4001`; probe events show failures on 4000.
 ### Fix
 
 ```bash
-./scripts/chaos/break-config.sh banking --undo
+./scripts/chaos/break-config.sh student-portal --undo
 ```
 
 ### Validation
@@ -118,7 +118,7 @@ Pods restart, previous state says `OOMKilled`, and service stability degrades.
 
 ### Datadog
 
-Use `kubernetes.memory.usage`, `kubernetes.memory.limits`, `kubernetes.containers.restarts`, the memory-saturation and pod-restarts monitors, and Kubernetes events.
+In **SRE Lab Scenario Signals**, filter `kube_namespace:support-tickets kube_deployment:support-tickets-backend` and compare `kubernetes.memory.usage`, `kubernetes.memory.limits`, and `kubernetes.containers.restarts`. Inspect the memory-saturation and pod-restarts monitor groups. In **Infrastructure > Kubernetes > Pods**, record the affected pod's memory, limit, and restart count; use Events Explorer for BackOff/termination timing.
 
 ### Root Cause
 
@@ -171,7 +171,7 @@ DNS and ALB are reachable and workloads are healthy, but users receive `404 Cann
 
 ### Datadog
 
-APM Trace Explorer shows `service:food-delivery-backend`, resource `GET /`, and `http.status_code:404`. Use **SRE Lab Scenario Signals** and **[SRE Lab] Unexpected backend root traffic**, based on `trace.express.request.hits.by_http_status{http.status_code:404,resource_name:get_/}`. ALB target health still requires AWS inspection.
+In **APM > Trace Explorer**, search `service:food-delivery-backend env:lab @http.status_code:404 resource_name:"GET /"`. A matching trace shows service `food-delivery-backend`, resource `GET /`, and status 404. Use **SRE Lab Scenario Signals** and **[SRE Lab] Unexpected backend root traffic**, based on `trace.express.request.hits.by_http_status{http.status_code:404,resource_name:get_/}`. Confirm healthy pods in Kubernetes Explorer. ALB target health still requires AWS inspection.
 
 ### Root Cause
 
@@ -223,7 +223,7 @@ Some requests are slow; pods stay Ready; p95 and slow traces increase without ma
 
 ### Datadog
 
-Use `p95:trace.express.request{env:lab,service:ecommerce-backend}`, **[SRE Lab] High p95 latency**, the ecommerce dashboard, APM traces, logs, and Kubernetes resource widgets.
+Open the ecommerce dashboard and inspect `p95:trace.express.request{env:lab,service:ecommerce-backend}`. In **APM > Trace Explorer**, search `service:ecommerce-backend env:lab duration:>2s`, then open a trace and inspect its total duration, resource, Flame Graph, and pod tags. Correlate **Logs > Explorer** query `service:ecommerce-backend` with the same time window. Compare CPU, memory, readiness, replicas, and restarts in Scenario Signals and Kubernetes Explorer. Monitor: **[SRE Lab] High p95 latency**.
 
 ### Root Cause
 

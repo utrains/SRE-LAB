@@ -31,7 +31,14 @@ The banking application still serves users, but a new release has not completed.
 
 ## Start With Datadog
 
-Open **SRE Lab Scenario Signals**. Compare `kubernetes_state.deployment.replicas_unavailable` and `kubernetes_state.deployment.replicas_available` for `kube_deployment:banking-backend`. Check Datadog Events for image-pull events. The **Deployment has unavailable replicas** monitor should alert.
+1. Open **Dashboards > SRE Lab Scenario Signals** and set the time range to the last 15 minutes.
+2. In **Unavailable Replicas**, filter `kube_namespace:banking` and `kube_deployment:banking-backend`. Look for `kubernetes_state.deployment.replicas_unavailable` rising above zero.
+3. Compare **Available Replicas**. Existing capacity may stay healthy while the new rollout is unavailable.
+4. Open **Monitors > Manage Monitors > [SRE Lab] Deployment has unavailable replicas**. Confirm the alert group names `banking/banking-backend`.
+5. Open **Infrastructure > Kubernetes > Deployments**, filter `kube_namespace:banking kube_deployment:banking-backend`, and inspect the Deployment and newest ReplicaSet.
+6. Open **Events > Explorer**, use the same namespace/workload tags, and look for `Failed`, `ErrImagePull`, `ImagePullBackOff`, or image-pull messages.
+
+Record the first signal timestamp, unavailable replica count, affected ReplicaSet, and event message before using `kubectl`.
 
 ## Troubleshooting
 

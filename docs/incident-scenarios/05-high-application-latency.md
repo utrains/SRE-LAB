@@ -31,7 +31,15 @@ Users report that ecommerce pages load slowly. Do not restart pods before scopin
 
 ## Start With Datadog
 
-Open the ecommerce dashboard and **SRE Lab Scenario Signals**. Inspect `trace.express.request` p95, throughput, errors, CPU, memory, replicas, logs, and the **High p95 latency** monitor. In APM, open slow `ecommerce-backend` traces and note which spans consume the time.
+1. Open **Dashboards > ecommerce** and set the time range to the last 15 minutes. In **p95 Latency**, look for `p95:trace.express.request{env:lab,service:ecommerce-backend}` rising above the normal baseline.
+2. Open **Dashboards > SRE Lab Scenario Signals**. Compare **Backend p95 Latency** with CPU, memory, restarts, and available replicas. The scenario should raise latency without requiring resource saturation or unhealthy pods.
+3. Open **Monitors > Manage Monitors > [SRE Lab] High p95 latency** and expand the `ecommerce-backend` group. Record warning/alert start time and value.
+4. Open **APM > Trace Explorer** and search `service:ecommerce-backend env:lab`. Sort or filter for the slowest traces, for example `duration:>2s`.
+5. Open a slow trace and use the Flame Graph or Waterfall. Record total duration, resource name, backend pod/container tags, and where the long duration appears.
+6. Open **Logs > Explorer**, set the same time range, and search `service:ecommerce-backend`. Correlate logs by timestamp and trace ID when available.
+7. Open **Infrastructure > Kubernetes > Pods**, filter `kube_namespace:ecommerce kube_deployment:ecommerce-backend`, and compare CPU, memory, Ready status, and restart count.
+
+The key scope is slow APM traces for one service while Kubernetes health and resource signals remain near baseline.
 
 ## Troubleshooting
 

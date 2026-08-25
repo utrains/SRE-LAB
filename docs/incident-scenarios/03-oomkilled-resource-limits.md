@@ -31,7 +31,14 @@ The support tickets service is unstable. Backend pods restart repeatedly while s
 
 ## Start With Datadog
 
-Open **SRE Lab Scenario Signals** and the support-tickets dashboard. Inspect `kubernetes.memory.usage`, `kubernetes.memory.limits`, and `kubernetes.containers.restarts` for `kube_deployment:support-tickets-backend`. Review Kubernetes Events. The memory-saturation and pod-restarts monitors should alert.
+1. Open **Dashboards > SRE Lab Scenario Signals** and set the time range to the last 15 minutes.
+2. In **Memory Usage and Limits**, filter `kube_namespace:support-tickets` and `kube_deployment:support-tickets-backend`. Compare `kubernetes.memory.usage` with `kubernetes.memory.limits` immediately before each restart.
+3. In **Container Restarts**, confirm `kubernetes.containers.restarts` increases for the same Deployment.
+4. Open **Monitors > Manage Monitors** and inspect **Memory saturation approaching container limit** and **Pod restarts detected**. Expand the `support-tickets-backend` group.
+5. Open **Infrastructure > Kubernetes > Pods**, filter `kube_namespace:support-tickets kube_deployment:support-tickets-backend`, and inspect Status, Restarts, Memory Usage, and Memory Limit.
+6. Open **Events > Explorer** with `kube_namespace:support-tickets` and look for BackOff or container termination events. Datadog may show the restart symptom before the exact termination reason.
+
+Record the memory value, configured limit, restart timestamp, pod name, and monitor transition. Confirm the exact `OOMKilled` reason later with `kubectl describe`.
 
 ## Troubleshooting
 

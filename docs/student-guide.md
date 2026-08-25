@@ -37,7 +37,7 @@ Each student can trigger and recover faults in their own lab deployment. Run onl
 | Scenario | Trigger | Recovery |
 |---|---|---|
 | Bad image | `./scripts/chaos/bad-deploy.sh banking banking-backend banking-backend` | `kubectl rollout undo deployment/banking-backend -n banking` |
-| Bad ConfigMap | `./scripts/chaos/break-config.sh banking` | `./scripts/chaos/break-config.sh banking --undo` |
+| Bad ConfigMap | `./scripts/chaos/break-config.sh student-portal` | `./scripts/chaos/break-config.sh student-portal --undo` |
 | OOMKilled | `./scripts/chaos/shrink-limits.sh support-tickets` | `./scripts/chaos/shrink-limits.sh support-tickets --undo` |
 | Bad Ingress | `./scripts/chaos/break-ingress.sh food-delivery` | `./scripts/chaos/break-ingress.sh food-delivery --undo` |
 | High latency | `./scripts/chaos/inject-latency.sh ecommerce 3000` | Reset every affected process with `./scripts/chaos/reset.sh ecommerce` or the README port-forward method |

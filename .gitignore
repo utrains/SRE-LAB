@@ -29,3 +29,4 @@ Thumbs.db
 
 # Cached Datadog RUM application ids/client tokens written by scripts/setup.sh
 .rum-apps.json
+. Microsoft
