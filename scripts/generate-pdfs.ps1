@@ -97,10 +97,14 @@ function Convert-Markdown([string]$Markdown) {
             Flush-Paragraph
             if ($listType -ne 'ul') { Close-List; [void]$html.Append('<ul>'); $listType = 'ul' }
             [void]$html.Append('<li>' + (Convert-Inline $matches[1]) + '</li>')
-        } elseif ($line -match '^\d+\.\s+(.+)$') {
+        } elseif ($line -match '^(\d+)\.\s+(.+)$') {
             Flush-Paragraph
-            if ($listType -ne 'ol') { Close-List; [void]$html.Append('<ol>'); $listType = 'ol' }
-            [void]$html.Append('<li>' + (Convert-Inline $matches[1]) + '</li>')
+            if ($listType -ne 'ol') {
+                Close-List
+                [void]$html.Append(('<ol start="{0}">' -f $matches[1]))
+                $listType = 'ol'
+            }
+            [void]$html.Append('<li>' + (Convert-Inline $matches[2]) + '</li>')
         } elseif ([string]::IsNullOrWhiteSpace($line)) {
             Flush-Paragraph; Close-List
         } else { $paragraph.Add($line.Trim()) }
