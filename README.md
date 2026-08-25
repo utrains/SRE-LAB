@@ -75,16 +75,10 @@ kubectl get pods -A
 All application Deployments should have their desired Ready replicas. Open the five URLs printed by `setup.sh`, then confirm that data appears in the Datadog application dashboards and **SRE Lab Scenario Signals** before triggering an incident.
 
 ## Architecture
+<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/fc430278-40fc-4eed-87d3-1524a559b7f9" />
 
-```text
-User -> Route 53 -> ALB -> Kubernetes Ingress -> Service -> Pod
-                                                        |
-                                                        v
-                                               RDS PostgreSQL
 
-ECR -> Kubernetes Deployment -> Pod
-Datadog Agent + Cluster Agent -> metrics, events, logs, and APM
-```
+
 
 Five applications share the EKS cluster: `ecommerce`, `banking`, `food-delivery`, `student-portal`, and `support-tickets`. Each has a React/nginx frontend and Node.js/Express backend. See [Architecture](docs/architecture.md) for the full design and training tradeoffs.
 
