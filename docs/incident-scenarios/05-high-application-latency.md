@@ -31,13 +31,13 @@ Users report that ecommerce pages load slowly. Do not restart pods before scopin
 
 ## Start With Datadog
 
-1. Open **Dashboards > ecommerce** and set the time range to the last 15 minutes. In **p95 Latency**, look for `p95:trace.express.request{env:lab,service:ecommerce-backend}` rising above the normal baseline.
-2. Open **Dashboards > SRE Lab Scenario Signals**. Compare **Backend p95 Latency** with CPU, memory, restarts, and available replicas. The scenario should raise latency without requiring resource saturation or unhealthy pods.
-3. Open **Monitors > Manage Monitors > [SRE Lab] High p95 latency** and expand the `ecommerce-backend` group. Record warning/alert start time and value.
-4. Open **APM > Trace Explorer** and search `service:ecommerce-backend env:lab`. Sort or filter for the slowest traces, for example `duration:>2s`.
+1. Go to **Dashboards > Dashboard List**, open **ecommerce**, and set the time range to **Past 30 Minutes**. In **p95 Latency**, look for `p95:trace.express.request{env:lab,service:ecommerce-backend}` rising above the normal baseline.
+2. Go to **Dashboards > Dashboard List**, open **SRE Lab Scenario Signals**, and compare **Backend p95 Latency** with memory, restarts, and available replicas. The scenario should raise latency without requiring resource saturation or unhealthy pods.
+3. Go to **Monitors > Manage Monitors**, search `[SRE Lab] High p95 latency`, open it, and expand the `ecommerce-backend` group. Record the alert start time and value.
+4. Go to **APM > Trace Explorer**, set **Past 30 Minutes**, and search `service:ecommerce-backend env:lab duration:>2s`.
 5. Open a slow trace and use the Flame Graph or Waterfall. Record total duration, resource name, backend pod/container tags, and where the long duration appears.
-6. Open **Logs > Explorer**, set the same time range, and search `service:ecommerce-backend`. Correlate logs by timestamp and trace ID when available.
-7. Open **Infrastructure > Kubernetes > Pods**, filter `kube_namespace:ecommerce kube_deployment:ecommerce-backend`, and compare CPU, memory, Ready status, and restart count.
+6. Go to **Logs > Explorer**, keep the same time range, and search `service:ecommerce-backend`. Correlate logs by timestamp and trace ID when available.
+7. Go to **Infrastructure > Kubernetes > Explorer**, select **Pods**, and enter `kube_namespace:ecommerce kube_deployment:ecommerce-backend` in **Filter by**. Compare CPU, memory, Ready status, and restart count.
 
 The key scope is slow APM traces for one service while Kubernetes health and resource signals remain near baseline.
 

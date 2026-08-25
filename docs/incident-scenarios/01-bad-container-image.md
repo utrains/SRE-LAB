@@ -31,14 +31,15 @@ The banking application still serves users, but a new release has not completed.
 
 ## Start With Datadog
 
-1. Open **Dashboards > SRE Lab Scenario Signals** and set the time range to the last 15 minutes.
-2. In **Unavailable Replicas**, filter `kube_namespace:banking` and `kube_deployment:banking-backend`. Look for `kubernetes_state.deployment.replicas_unavailable` rising above zero.
-3. Compare **Available Replicas**. Existing capacity may stay healthy while the new rollout is unavailable.
-4. Open **Monitors > Manage Monitors > [SRE Lab] Deployment has unavailable replicas**. Confirm the alert group names `banking/banking-backend`.
-5. Open **Infrastructure > Kubernetes > Deployments**, filter `kube_namespace:banking kube_deployment:banking-backend`, and inspect the Deployment and newest ReplicaSet.
-6. Open **Events > Explorer**, use the same namespace/workload tags, and look for `Failed`, `ErrImagePull`, `ImagePullBackOff`, or image-pull messages.
+1. Go to **Infrastructure > Kubernetes > Explorer**, select **Pods** under **Select Resources**, and set the time range to **Past 30 Minutes**.
+2. In **Filter by**, enter `kube_namespace:banking kube_deployment:banking-backend`. Open the newest pod whose status is `ErrImagePull` or `ImagePullBackOff`, then record its pod name and image.
+3. Go to **Events > Explorer**, keep **Past 30 Minutes**, and search `kube_namespace:banking status:(warning OR error)`. Open an event containing `ErrImagePull`, `ImagePullBackOff`, `Failed to pull image`, or `does-not-exist`.
+4. Go to **Metrics > Explorer**. Graph `max:kubernetes_state.deployment.replicas_desired{kube_namespace:banking,kube_deployment:banking-backend}` and `max:kubernetes_state.deployment.replicas_updated{kube_namespace:banking,kube_deployment:banking-backend}`. A stuck rollout shows desired `2` and updated `1`.
+5. Go to **Dashboards > SRE Lab Scenario Signals** and inspect **Desired vs Updated Replicas** and **Available Replicas** for `banking/banking-backend`.
 
-Record the first signal timestamp, unavailable replica count, affected ReplicaSet, and event message before using `kubectl`.
+`kubernetes_state.deployment.replicas_unavailable` can remain `0` in this scenario because the two old pods continue serving while Kubernetes creates one bad surge pod. Use the desired-versus-updated gap plus the image-pull event as the primary evidence.
+
+Record the first event timestamp, failed pod, requested image, desired count, and updated count before using `kubectl`.
 
 ## Troubleshooting
 

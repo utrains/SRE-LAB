@@ -4,6 +4,7 @@
   "layout_type": "ordered",
   "template_variables": [{"name": "env", "prefix": "env", "default": "lab"}],
   "widgets": [
+    {"definition":{"type":"timeseries","title":"Desired vs Updated Replicas","requests":[{"q":"max:kubernetes_state.deployment.replicas_desired{$env} by {kube_namespace,kube_deployment}","display_type":"line"},{"q":"max:kubernetes_state.deployment.replicas_updated{$env} by {kube_namespace,kube_deployment}","display_type":"line"}]}},
     {"definition":{"type":"timeseries","title":"Unavailable Replicas","requests":[{"q":"max:kubernetes_state.deployment.replicas_unavailable{$env} by {kube_namespace,kube_deployment}","display_type":"line"}]}},
     {"definition":{"type":"timeseries","title":"Available Replicas","requests":[{"q":"max:kubernetes_state.deployment.replicas_available{$env} by {kube_namespace,kube_deployment}","display_type":"line"}]}},
     {"definition":{"type":"timeseries","title":"Container Restarts","requests":[{"q":"sum:kubernetes.containers.restarts{$env} by {kube_namespace,kube_deployment}.as_count()","display_type":"bars"}]}},

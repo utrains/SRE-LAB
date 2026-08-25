@@ -4,6 +4,11 @@
 # `kubectl create secret` + `helm install` commands.
 
 datadog:
+  # Orchestrator Explorer requires a non-empty cluster name. The Agent may not
+  # auto-detect it on EKS, and without it Kubernetes Explorer shows no pods or
+  # workloads even though the Agent and Cluster Agent are healthy.
+  clusterName: sre-lab
+
   # Global static tags, attached to every metric, event and service check the
   # Agent and Cluster Agent emit. Pod-level telemetry already gets env/service/
   # version from the tags.datadoghq.com/* pod labels (unified service tagging),

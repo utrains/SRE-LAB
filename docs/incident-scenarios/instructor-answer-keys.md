@@ -10,11 +10,11 @@ The banking backend rollout references an ECR tag that does not exist. The old R
 
 ### Symptoms
 
-New pods show `ErrImagePull` or `ImagePullBackOff`, unavailable replicas increase, and rollout status times out.
+New pods show `ErrImagePull` or `ImagePullBackOff`, desired replicas exceed updated replicas, and rollout status times out. Available replicas can remain healthy because the old pods continue serving.
 
 ### Datadog
 
-Use **Dashboards > SRE Lab Scenario Signals** with `kube_namespace:banking kube_deployment:banking-backend`, `kubernetes_state.deployment.replicas_unavailable`, and **[SRE Lab] Deployment has unavailable replicas**. In **Infrastructure > Kubernetes > Deployments**, inspect the banking backend and newest ReplicaSet. In **Events > Explorer**, use the banking namespace/workload tags and find the image-pull event collected by the Cluster Agent.
+In **Infrastructure > Kubernetes > Explorer**, select **Pods** and enter `kube_namespace:banking kube_deployment:banking-backend` in **Filter by**. Open the failed surge pod. In **Events > Explorer**, search `kube_namespace:banking status:(warning OR error)` and open the image-pull event. In **Metrics > Explorer**, compare `kubernetes_state.deployment.replicas_desired` with `kubernetes_state.deployment.replicas_updated` for the same namespace and Deployment. The expected failure state is desired `2`, updated `1`, and available `2`; unavailable can remain `0`.
 
 ### Root Cause
 
@@ -22,7 +22,7 @@ Use **Dashboards > SRE Lab Scenario Signals** with `kube_namespace:banking kube_
 
 ### Troubleshooting Path
 
-Datadog -> Deployment -> pod describe -> events -> image -> ECR tags.
+Datadog Kubernetes Explorer -> failed pod -> Events Explorer -> desired versus updated replicas -> image -> ECR tags.
 
 ### Commands
 
@@ -48,7 +48,7 @@ kubectl rollout undo deployment/banking-backend -n banking
 
 ### Validation
 
-Confirm rollout completion, all pods Ready, a working app, unavailable replicas at zero, and monitor recovery.
+Confirm rollout completion, desired and updated replicas both equal `2`, all pods are Ready, the application works, and the image-pull events stop.
 
 ### DevOps Lesson
 
@@ -66,7 +66,7 @@ New pods fail probes, restart, and prevent rollout completion while old pods may
 
 ### Datadog
 
-Use `kubernetes_state.deployment.replicas_unavailable`, `kubernetes.containers.restarts`, their two monitors, probe-failure events, and `service:student-portal-backend` logs. In Scenario Signals filter `kube_namespace:student-portal kube_deployment:student-portal-backend`; in Log Explorer search `service:student-portal-backend`; in Kubernetes Explorer inspect the newest student portal backend pods.
+In **Infrastructure > Kubernetes > Explorer**, select **Pods** and filter `kube_namespace:student-portal kube_deployment:student-portal-backend`. In **Events > Explorer**, search `kube_namespace:student-portal status:(warning OR error)` for probe failures. In **Logs > Explorer**, search `service:student-portal-backend` for the listening port. Use **SRE Lab Scenario Signals** for desired versus updated replicas and restarts, and **Monitors > Manage Monitors** for the pod-restarts monitor.
 
 ### Root Cause
 
@@ -118,7 +118,7 @@ Pods restart, previous state says `OOMKilled`, and service stability degrades.
 
 ### Datadog
 
-In **SRE Lab Scenario Signals**, filter `kube_namespace:support-tickets kube_deployment:support-tickets-backend` and compare `kubernetes.memory.usage`, `kubernetes.memory.limits`, and `kubernetes.containers.restarts`. Inspect the memory-saturation and pod-restarts monitor groups. In **Infrastructure > Kubernetes > Pods**, record the affected pod's memory, limit, and restart count; use Events Explorer for BackOff/termination timing.
+In **SRE Lab Scenario Signals**, filter `kube_namespace:support-tickets kube_deployment:support-tickets-backend` and compare `kubernetes.memory.usage`, `kubernetes.memory.limits`, and `kubernetes.containers.restarts`. Inspect the memory-saturation and pod-restarts monitor groups. In **Infrastructure > Kubernetes > Explorer**, select **Pods**, enter the same namespace and Deployment tags in **Filter by**, and record the affected pod's memory, limit, and restart count. Use **Events > Explorer** for BackOff or termination timing.
 
 ### Root Cause
 

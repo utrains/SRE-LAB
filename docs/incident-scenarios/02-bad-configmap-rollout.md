@@ -31,15 +31,13 @@ The student portal has reduced rollout capacity after a configuration release. E
 
 ## Start With Datadog
 
-1. Open **Dashboards > SRE Lab Scenario Signals** with a last-15-minutes window.
-2. Filter **Unavailable Replicas** to `kube_namespace:student-portal` and `kube_deployment:student-portal-backend`. Look for a value above zero.
-3. In **Container Restarts**, use the same filters and look for a rising `kubernetes.containers.restarts` series.
-4. Open **Monitors > Manage Monitors** and inspect **Deployment has unavailable replicas** and **Pod restarts detected**. Expand the `student-portal-backend` alert group.
-5. Open **Infrastructure > Kubernetes > Pods** and filter `kube_namespace:student-portal kube_deployment:student-portal-backend`. Compare Ready status and restart counts between older and newer pods.
-6. Open **Events > Explorer** with `kube_namespace:student-portal`. Look for readiness/liveness probe failures and BackOff events.
-7. Open **Logs > Explorer**, set the last 15 minutes, and search `service:student-portal-backend`. Look for the startup line that reports the listening port.
+1. Go to **Infrastructure > Kubernetes > Explorer**, select **Pods**, set **Past 30 Minutes**, and enter `kube_namespace:student-portal kube_deployment:student-portal-backend` in **Filter by**. Compare Ready status and restarts on the old and new pods.
+2. Go to **Events > Explorer** and search `kube_namespace:student-portal status:(warning OR error)`. Open the readiness-probe, liveness-probe, or BackOff event for the newest backend pod.
+3. Go to **Logs > Explorer**, set **Past 30 Minutes**, and search `service:student-portal-backend`. Open a startup log and record the port on which the process is listening.
+4. Go to **Dashboards > SRE Lab Scenario Signals**. Inspect **Desired vs Updated Replicas**, **Container Restarts**, and **Available Replicas** for the student portal backend.
+5. Go to **Monitors > Manage Monitors**, search `[SRE Lab]`, and open **Pod restarts detected**. Expand the group for `student-portal-backend` if it has triggered.
 
-Record the first unavailable-replica timestamp, newest pod, probe event, restart change, and logged listening port.
+Record the newest pod, first probe-event timestamp, restart change, and logged listening port.
 
 ## Troubleshooting
 

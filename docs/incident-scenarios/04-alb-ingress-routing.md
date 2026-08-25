@@ -31,12 +31,12 @@ Users receive HTTP 404 from the food delivery home page even though the Kubernet
 
 ## Start With Datadog
 
-1. Open **Dashboards > SRE Lab Scenario Signals** and set the time range to the last 15 minutes.
+1. Go to **Dashboards > SRE Lab Scenario Signals** and set the time range to **Past 30 Minutes**.
 2. Inspect **Backend GET / HTTP 404 Responses** for `service:food-delivery-backend`. This widget uses `trace.express.request.hits.by_http_status` filtered by `http.status_code:404` and metric-normalized `resource_name:get_/`.
-3. Open **Monitors > Manage Monitors > [SRE Lab] Unexpected backend root traffic** and expand the `food-delivery-backend` group.
-4. Open **APM > Trace Explorer** and search `service:food-delivery-backend env:lab @http.status_code:404 resource_name:"GET /"`. Set the time range to the last 15 minutes.
+3. Go to **Monitors > Manage Monitors**, search `[SRE Lab] Unexpected backend root traffic`, open it, and expand the `food-delivery-backend` group.
+4. Go to **APM > Trace Explorer**, set **Past 30 Minutes**, and search `service:food-delivery-backend env:lab @http.status_code:404 resource_name:"GET /"`.
 5. Open a matching trace. In the trace header verify service `food-delivery-backend`, resource `GET /`, and HTTP status 404. In the Infrastructure tab record the pod and Kubernetes tags.
-6. Open **Infrastructure > Kubernetes > Pods**, filter `kube_namespace:food-delivery`, and confirm frontend and backend pods remain Running and Ready.
+6. Go to **Infrastructure > Kubernetes > Explorer**, select **Pods**, and enter `kube_namespace:food-delivery` in **Filter by**. Confirm frontend and backend pods remain Running and Ready.
 
 This repository does not install the Datadog AWS integration, so ALB listeners, rules, and target health are not available in Datadog. Record the 404 trace timestamp and backend pod, then continue with AWS CLI and Kubernetes.
 
