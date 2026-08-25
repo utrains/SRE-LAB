@@ -34,34 +34,44 @@ Users receive HTTP 404 from the food delivery home page even though the Kubernet
 1. Go to **Dashboards > SRE Lab Scenario Signals** and set the time range to **Past 30 Minutes**.
 2. Inspect **Backend GET / HTTP 404 Responses** for `service:food-delivery-backend`. This widget uses `trace.express.request.hits.by_http_status` filtered by `http.status_code:404` and metric-normalized `resource_name:get_/`.
 3. Go to **Monitors > Manage Monitors**, search `[SRE Lab] Unexpected backend root traffic`, open it, and expand the `food-delivery-backend` group.
-4. Go to **APM > Trace Explorer**, set **Past 30 Minutes**, and search `service:food-delivery-backend env:lab @http.status_code:404 resource_name:"GET /"`.
-5. Open a matching trace. In the trace header verify service `food-delivery-backend`, resource `GET /`, and HTTP status 404. In the Infrastructure tab record the pod and Kubernetes tags.
-6. Go to **Infrastructure > Kubernetes > Explorer**, select **Pods**, and enter `kube_namespace:food-delivery` in **Filter by**. Confirm frontend and backend pods remain Running and Ready.
 
 This repository does not install the Datadog AWS integration, so ALB listeners, rules, and target health are not available in Datadog. Record the 404 trace timestamp and backend pod, then continue with AWS CLI and Kubernetes.
 
 ## Troubleshooting
 
-Trace the Kubernetes portion of the request path.
+1. Confirm that the workloads are healthy.
 
 ```bash
-kubectl get ingress -A
-kubectl describe ingress food-delivery -n food-delivery
-kubectl get svc -n food-delivery
-kubectl describe svc food-delivery-frontend -n food-delivery
-kubectl get endpoints -n food-delivery
 kubectl get pods -n food-delivery
 ```
 
-Then trace the AWS portion. Obtain ARNs from each preceding command.
+Expected output: frontend and backend pods are Running and Ready. This moves the investigation away from pod health and toward request routing.
+
+2. Inspect the public Ingress route.
+
+```bash
+kubectl describe ingress food-delivery -n food-delivery
+```
+
+Expected output: the `/` path points to `food-delivery-backend:4000`. It should point to `food-delivery-frontend:80`.
+
+3. Confirm that both Services and endpoint sets exist.
+
+```bash
+kubectl get svc,endpoints -n food-delivery
+```
+
+Expected output: the frontend Service listens on port `80`, the backend listens on `4000`, and both have endpoints. This proves the failure is an incorrect Ingress destination rather than a missing Service or pod.
+
+4. Confirm the ALB is present and serving the incorrect rule.
 
 ```bash
 aws elbv2 describe-load-balancers --region us-east-1
 aws elbv2 describe-listeners --load-balancer-arn <alb-arn> --region us-east-1
 aws elbv2 describe-rules --listener-arn <listener-arn> --region us-east-1
-aws elbv2 describe-target-health --target-group-arn <target-group-arn> --region us-east-1
-aws route53 list-resource-record-sets --hosted-zone-id <hosted-zone-id>
 ```
+
+Expected output: the ALB and HTTPS listener are active, and the host rule forwards traffic to the target group created from the incorrect backend Service. The Ingress backend selection is the root cause.
 
 ## Important Clues
 

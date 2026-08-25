@@ -34,24 +34,44 @@ The support tickets service is unstable. Backend pods restart repeatedly while s
 1. Go to **Dashboards > SRE Lab Scenario Signals** and set the time range to **Past 30 Minutes**.
 2. In **Memory Usage and Limits**, filter `kube_namespace:support-tickets` and `kube_deployment:support-tickets-backend`. Compare `kubernetes.memory.usage` with `kubernetes.memory.limits` immediately before each restart.
 3. In **Container Restarts**, confirm `kubernetes.containers.restarts` increases for the same Deployment.
-4. Go to **Monitors > Manage Monitors**, search `[SRE Lab]`, and inspect **Memory saturation approaching container limit** and **Pod restarts detected**. Expand the `support-tickets-backend` group.
-5. Go to **Infrastructure > Kubernetes > Explorer**, select **Pods**, and enter `kube_namespace:support-tickets kube_deployment:support-tickets-backend` in **Filter by**. Inspect Status, Restarts, Memory Usage, and Memory Limit.
-6. Go to **Events > Explorer** and search `kube_namespace:support-tickets status:(warning OR error)`. Look for BackOff or container termination events. Datadog may show the restart symptom before the exact termination reason.
 
 Record the memory value, configured limit, restart timestamp, pod name, and monitor transition. Confirm the exact `OOMKilled` reason later with `kubectl describe`.
 
 ## Troubleshooting
 
-Find the restarting pod and compare live usage with its resource specification.
+1. Identify the restarting pod.
 
 ```bash
-kubectl get pods -n support-tickets
-kubectl top pods -n support-tickets
-kubectl describe pod <pod-name> -n support-tickets
-kubectl get events -n support-tickets --sort-by=.lastTimestamp
-kubectl logs <pod-name> -n support-tickets --previous
-kubectl get deployment support-tickets-backend -n support-tickets -o yaml
+kubectl get pods -n support-tickets -l app=support-tickets-backend
 ```
+
+Expected output: the backend pod is Running again, but its `RESTARTS` count is greater than zero and continues increasing.
+
+2. Inspect the previous container termination.
+
+```bash
+kubectl describe pod <pod-name> -n support-tickets
+```
+
+Expected output: under **Last State**, the reason is `OOMKilled` and the exit code is `137`.
+
+3. Compare live memory with the configured limit.
+
+```bash
+kubectl top pod <pod-name> -n support-tickets
+kubectl get deployment support-tickets-backend -n support-tickets \
+  -o jsonpath='{.spec.template.spec.containers[0].resources}{"\n"}'
+```
+
+Expected output: memory usage approaches the deliberately reduced `20Mi` memory limit. The container exceeds that limit and Kubernetes terminates it.
+
+4. Check the previous container logs for supporting evidence.
+
+```bash
+kubectl logs <pod-name> -n support-tickets --previous
+```
+
+Expected output: logs stop around the restart time and may not contain a graceful application error. `OOMKilled` in the pod state is the authoritative evidence.
 
 ## Important Clues
 

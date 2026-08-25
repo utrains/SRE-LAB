@@ -34,36 +34,54 @@ The banking application still serves users, but a new release has not completed.
 1. Go to **Infrastructure > Kubernetes > Explorer**, select **Pods** under **Select Resources**, and set the time range to **Past 30 Minutes**.
 2. In **Filter by**, enter `kube_namespace:banking kube_deployment:banking-backend`. Open the newest pod whose status is `ErrImagePull` or `ImagePullBackOff`, then record its pod name and image.
 3. Go to **Events > Explorer**, keep **Past 30 Minutes**, and search `kube_namespace:banking status:(warning OR error)`. Open an event containing `ErrImagePull`, `ImagePullBackOff`, `Failed to pull image`, or `does-not-exist`.
-4. Go to **Metrics > Explorer**. Graph `max:kubernetes_state.deployment.replicas_desired{kube_namespace:banking,kube_deployment:banking-backend}` and `max:kubernetes_state.deployment.replicas_updated{kube_namespace:banking,kube_deployment:banking-backend}`. A stuck rollout shows desired `2` and updated `1`.
-5. Go to **Dashboards > SRE Lab Scenario Signals** and inspect **Desired vs Updated Replicas** and **Available Replicas** for `banking/banking-backend`.
 
 `kubernetes_state.deployment.replicas_unavailable` can remain `0` in this scenario because the two old pods continue serving while Kubernetes creates one bad surge pod. Use the desired-versus-updated gap plus the image-pull event as the primary evidence.
 
-Record the first event timestamp, failed pod, requested image, desired count, and updated count before using `kubectl`.
+Record the first event timestamp, failed pod, and requested image before using `kubectl`.
 
 ## Troubleshooting
 
-First find the incomplete rollout and its new pods.
+1. Check the Deployment summary.
 
 ```bash
-kubectl get deployments -A
-kubectl get pods -A
-kubectl rollout status deployment/banking-backend -n banking
+kubectl get deployment banking-backend -n banking
 ```
 
-Then inspect the newest pod, its events, and the image requested by the Deployment.
+Expected output: `READY` remains `2/2`, `AVAILABLE` remains `2`, but `UP-TO-DATE` is only `1`. This means the old replicas are healthy while the new rollout is incomplete.
+
+2. Find the failed new pod.
+
+```bash
+kubectl get pods -n banking -l app=banking-backend
+```
+
+Expected output: two older pods are `Running`, while the newest pod is `ErrImagePull` or `ImagePullBackOff` and shows `0/1` Ready.
+
+3. Inspect the failed pod and its recent events.
 
 ```bash
 kubectl describe pod <pod-name> -n banking
-kubectl get events -n banking --sort-by=.lastTimestamp
-kubectl get deployment banking-backend -n banking -o yaml
 ```
 
-Compare the configured tag with ECR.
+Expected output: the **Events** section contains `Failed to pull image`, the requested tag ends in `does-not-exist`, and the registry reports that the image was not found.
+
+4. Confirm the image configured on the Deployment.
 
 ```bash
-aws ecr describe-images --repository-name sre-lab/banking-backend --region us-east-1
+kubectl get deployment banking-backend -n banking \
+  -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
 ```
+
+Expected output: an ECR image URL ending in `:does-not-exist`.
+
+5. Compare the requested tag with the images that actually exist in ECR.
+
+```bash
+aws ecr describe-images --repository-name sre-lab/banking-backend \
+  --region us-east-1 --query 'imageDetails[].imageTags' --output table
+```
+
+Expected output: valid image tags are listed, but `does-not-exist` is absent. The missing ECR tag is the root cause.
 
 ## Important Clues
 

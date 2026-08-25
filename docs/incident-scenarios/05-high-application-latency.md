@@ -34,27 +34,42 @@ Users report that ecommerce pages load slowly. Do not restart pods before scopin
 1. Go to **Dashboards > Dashboard List**, open **ecommerce**, and set the time range to **Past 30 Minutes**. In **p95 Latency**, look for `p95:trace.express.request{env:lab,service:ecommerce-backend}` rising above the normal baseline.
 2. Go to **Dashboards > Dashboard List**, open **SRE Lab Scenario Signals**, and compare **Backend p95 Latency** with memory, restarts, and available replicas. The scenario should raise latency without requiring resource saturation or unhealthy pods.
 3. Go to **Monitors > Manage Monitors**, search `[SRE Lab] High p95 latency`, open it, and expand the `ecommerce-backend` group. Record the alert start time and value.
-4. Go to **APM > Trace Explorer**, set **Past 30 Minutes**, and search `service:ecommerce-backend env:lab duration:>2s`.
-5. Open a slow trace and use the Flame Graph or Waterfall. Record total duration, resource name, backend pod/container tags, and where the long duration appears.
-6. Go to **Logs > Explorer**, keep the same time range, and search `service:ecommerce-backend`. Correlate logs by timestamp and trace ID when available.
-7. Go to **Infrastructure > Kubernetes > Explorer**, select **Pods**, and enter `kube_namespace:ecommerce kube_deployment:ecommerce-backend` in **Filter by**. Compare CPU, memory, Ready status, and restart count.
 
 The key scope is slow APM traces for one service while Kubernetes health and resource signals remain near baseline.
 
 ## Troubleshooting
 
-Use the Datadog service and time window to scope Kubernetes checks.
+1. Confirm Kubernetes health.
 
 ```bash
-kubectl get pods -n ecommerce
-kubectl top pods -n ecommerce
-kubectl get deployment -n ecommerce
-kubectl describe pod <pod-name> -n ecommerce
-kubectl logs <pod-name> -n ecommerce
-kubectl get events -n ecommerce --sort-by=.lastTimestamp
+kubectl get deployment,pods -n ecommerce
 ```
 
-Compare slow traces with CPU, memory, replica count, events, and logs. Inspect workload behavior instead of changing unrelated infrastructure.
+Expected output: the Deployment is fully available, pods are Ready, and restart counts remain stable. The application is slow but not unavailable.
+
+2. Check resource usage.
+
+```bash
+kubectl top pods -n ecommerce
+```
+
+Expected output: CPU and memory remain near their normal baseline. This makes resource saturation and OOM restarts unlikely.
+
+3. Inspect the backend logs during the slow-trace timestamps.
+
+```bash
+kubectl logs deployment/ecommerce-backend -n ecommerce --since=15m
+```
+
+Expected output: requests complete without crashes, but response timing corresponds to the slow traces. There should be no probe failure, OOM, or restart pattern.
+
+4. Check the application's current chaos state.
+
+```bash
+curl -s "https://ecommerce.$(cat .lab-domain)/api/chaos"
+```
+
+Expected output: JSON containing `"latencyMs":3000`. This in-memory setting explains traces taking approximately three seconds while Kubernetes remains healthy.
 
 ## Important Clues
 

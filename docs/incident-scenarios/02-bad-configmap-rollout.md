@@ -34,32 +34,45 @@ The student portal has reduced rollout capacity after a configuration release. E
 1. Go to **Infrastructure > Kubernetes > Explorer**, select **Pods**, set **Past 30 Minutes**, and enter `kube_namespace:student-portal kube_deployment:student-portal-backend` in **Filter by**. Compare Ready status and restarts on the old and new pods.
 2. Go to **Events > Explorer** and search `kube_namespace:student-portal status:(warning OR error)`. Open the readiness-probe, liveness-probe, or BackOff event for the newest backend pod.
 3. Go to **Logs > Explorer**, set **Past 30 Minutes**, and search `service:student-portal-backend`. Open a startup log and record the port on which the process is listening.
-4. Go to **Dashboards > SRE Lab Scenario Signals**. Inspect **Desired vs Updated Replicas**, **Container Restarts**, and **Available Replicas** for the student portal backend.
-5. Go to **Monitors > Manage Monitors**, search `[SRE Lab]`, and open **Pod restarts detected**. Expand the group for `student-portal-backend` if it has triggered.
 
 Record the newest pod, first probe-event timestamp, restart change, and logged listening port.
 
 ## Troubleshooting
 
-Check rollout health and identify the newest pods.
+1. Check the rollout and identify the unhealthy new pod.
 
 ```bash
-kubectl get deployments -n student-portal
-kubectl get pods -n student-portal
-kubectl rollout status deployment/student-portal-backend -n student-portal
+kubectl get deployment student-portal-backend -n student-portal
+kubectl get pods -n student-portal -l app=student-portal-backend
+```
+
+Expected output: the rollout is incomplete, and the newest pod is not Ready or is restarting while older pods remain Running.
+
+2. Inspect the new pod.
+
+```bash
 kubectl describe pod <pod-name> -n student-portal
-kubectl get events -n student-portal --sort-by=.lastTimestamp
+```
+
+Expected output: events show readiness or liveness probe failures against port `4000`, often followed by `BackOff` or a container restart.
+
+3. Read the application startup logs.
+
+```bash
 kubectl logs <pod-name> -n student-portal
 ```
 
-After confirming probe failures, compare workload configuration with the probes and rollout history.
+Expected output: the application reports that it is listening on port `4001`. This conflicts with the probes checking port `4000`.
+
+4. Compare the ConfigMap value with the Deployment probes.
 
 ```bash
-kubectl get configmaps -n student-portal
-kubectl describe configmap student-portal-backend-config -n student-portal
-kubectl get deployment student-portal-backend -n student-portal -o yaml
-kubectl rollout history deployment/student-portal-backend -n student-portal
+kubectl get configmap student-portal-backend-config -n student-portal -o yaml
+kubectl get deployment student-portal-backend -n student-portal \
+  -o jsonpath='{.spec.template.spec.containers[0].readinessProbe.httpGet.port}{"\n"}'
 ```
+
+Expected output: the ConfigMap contains `PORT: "4001"`, but the readiness probe returns `4000`. The port mismatch is the root cause.
 
 ## Important Clues
 
