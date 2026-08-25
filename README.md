@@ -8,6 +8,72 @@ The training loop is:
 Datadog symptom -> scope -> Kubernetes or AWS evidence -> root cause -> fix -> Datadog recovery
 ```
 
+## Launch the lab
+
+Complete these steps in order. The deployment creates billable AWS resources, so review the prerequisites and keep the teardown command available before you begin.
+
+### 1. Create the Datadog keys before launching
+
+The lab requires both keys at launch:
+
+- `DATADOG_API_KEY` lets the Datadog Agent send metrics, events, logs, and traces.
+- `DATADOG_APP_KEY` lets the setup script import the included dashboards and monitors and provision Real User Monitoring (RUM).
+
+In Datadog, create or obtain an API key and an application key for your account. Store them securely and never add them to `terraform.tfvars`, a source file, or Git. Confirm the correct Datadog site for your account, such as `datadoghq.com` or `datadoghq.eu`.
+
+### 2. Check the prerequisites
+
+- Bash 4.4 or newer
+- Terraform, AWS CLI, kubectl, Docker, Helm, jq, `envsubst`, `curl`, and `nslookup`
+- An AWS account with credentials configured
+- An existing Route 53 public hosted zone with registrar delegation already configured
+- A Datadog account, API key, and application key
+- Budget for real EKS, EC2, NAT Gateway, ALB, Route 53, and RDS resources
+
+The fixed resource names support one lab deployment per AWS account. Run the commands from Bash on Linux, WSL, or macOS. macOS users need a newer Bash than the system Bash 3.2.
+
+Verify the most important connections before launching:
+
+```bash
+aws sts get-caller-identity
+docker version
+terraform version
+kubectl version --client
+helm version
+```
+
+### 3. Configure the domain
+
+```bash
+cp terraform/terraform.tfvars.example terraform/terraform.tfvars
+```
+
+Open `terraform/terraform.tfvars` and set `dns_zone_name` to the Route 53 public hosted zone that will host the five application records.
+
+### 4. Launch the complete environment
+
+Replace the placeholder values and run the command from the repository root. Do not save real keys in the command history of a shared computer.
+
+```bash
+DATADOG_API_KEY=<api-key> \
+DATADOG_APP_KEY=<app-key> \
+DATADOG_SITE=datadoghq.com \
+  ./scripts/setup.sh
+```
+
+`setup.sh` validates prerequisites, provisions the Terraform resources, builds and pushes ten images, initializes the application databases, deploys the Kubernetes workloads, configures ALB and Route 53, installs metrics-server, and installs Datadog. When both Datadog keys are supplied, it also imports the included dashboards and monitors and provisions RUM. The script prints each application URL when it finishes.
+
+### 5. Verify the deployment
+
+```bash
+aws eks update-kubeconfig --name sre-lab --region us-east-1
+kubectl get nodes
+kubectl get deployments -A
+kubectl get pods -A
+```
+
+All application Deployments should have their desired Ready replicas. Open the five URLs printed by `setup.sh`, then confirm that data appears in the Datadog application dashboards and **SRE Lab Scenario Signals** before triggering an incident.
+
 ## Architecture
 
 ```text
@@ -32,38 +98,6 @@ ingress/               One hostname-based Ingress per application
 namespaces/            Namespaces, quotas, and limit ranges
 scripts/               Setup, teardown, PDF generation, and chaos triggers
 terraform/             VPC, EKS, ECR, RDS, Route 53, IAM, and ALB controller
-```
-
-## Prerequisites
-
-- Bash 4.4 or newer
-- Terraform, AWS CLI, kubectl, Docker, Helm, jq, `envsubst`, `curl`, and `nslookup`
-- An AWS account with credentials configured
-- An existing Route 53 public hosted zone with registrar delegation already configured
-- A Datadog account and API key; an application key is needed to import dashboards/monitors and provision RUM
-- Budget for real EKS, EC2, NAT Gateway, ALB, Route 53, and RDS resources
-
-The fixed resource names support one lab deployment per AWS account. macOS users need a newer Bash than the system Bash 3.2.
-
-## Deploy
-
-```bash
-cp terraform/terraform.tfvars.example terraform/terraform.tfvars
-# Set dns_zone_name in terraform/terraform.tfvars.
-
-DATADOG_API_KEY=<api-key> \
-DATADOG_APP_KEY=<app-key> \
-DATADOG_SITE=datadoghq.com \
-  ./scripts/setup.sh
-```
-
-`setup.sh` validates prerequisites, provisions Terraform resources, builds and pushes ten images, initializes the application databases, deploys Kubernetes workloads, configures ALB and Route 53, installs metrics-server, and optionally installs/imports Datadog assets. It prints each application URL when complete.
-
-Reconnect kubectl when needed:
-
-```bash
-aws eks update-kubeconfig --name sre-lab --region us-east-1
-kubectl get pods -A
 ```
 
 ## Access applications
@@ -104,10 +138,12 @@ Student scenarios begin with symptoms and Datadog. Solutions and instructor trig
 - [Runbooks](docs/runbooks/)
 - [SLO, SLA, and SLI](docs/slo-sla-sli.md)
 - [Error budgets](docs/error-budget.md)
+- [SRE Lab launch guide PDF](docs/pdf/sre-lab-launch-guide.pdf)
+- [DevOps STAR scenario PDF](docs/pdf/devops-star-scenarios.pdf)
 - [Combined scenario PDF](docs/pdf/sre-lab-devops-scenarios.pdf)
 - [Individual scenario PDFs](docs/pdf/)
 
-Markdown files under `docs/incident-scenarios/` are the source of truth. Regenerate PDFs with:
+The README, DevOps STAR document, and Markdown files under `docs/incident-scenarios/` are the PDF sources. Regenerate PDFs with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/generate-pdfs.ps1

@@ -160,7 +160,23 @@ $combinedHtml = Join-Path $BuildDir 'sre-lab-devops-scenarios.html'
 [System.IO.File]::WriteAllText($combinedHtml, (New-Html 'SRE Lab DevOps Scenarios' $combined.ToString()), [System.Text.UTF8Encoding]::new($false))
 Print-Pdf $combinedHtml (Join-Path $OutputDir 'sre-lab-devops-scenarios.pdf')
 
+$starSourcePath = Join-Path $RepoRoot 'docs\devops-star-scenarios.md'
+if (-not (Test-Path -LiteralPath $starSourcePath)) { throw "Missing Markdown source: $starSourcePath" }
+$starMarkdown = Get-Content -Raw -LiteralPath $starSourcePath
+$starBody = Convert-Markdown $starMarkdown
+$starHtml = Join-Path $BuildDir 'devops-star-scenarios.html'
+[System.IO.File]::WriteAllText($starHtml, (New-Html 'DevOps STAR Scenarios' $starBody), [System.Text.UTF8Encoding]::new($false))
+Print-Pdf $starHtml (Join-Path $OutputDir 'devops-star-scenarios.pdf')
+
+$guideSourcePath = Join-Path $RepoRoot 'README.md'
+if (-not (Test-Path -LiteralPath $guideSourcePath)) { throw "Missing Markdown source: $guideSourcePath" }
+$guideMarkdown = Get-Content -Raw -LiteralPath $guideSourcePath
+$guideBody = Convert-Markdown $guideMarkdown
+$guideHtml = Join-Path $BuildDir 'sre-lab-launch-guide.html'
+[System.IO.File]::WriteAllText($guideHtml, (New-Html 'SRE Lab Launch Guide' $guideBody), [System.Text.UTF8Encoding]::new($false))
+Print-Pdf $guideHtml (Join-Path $OutputDir 'sre-lab-launch-guide.pdf')
+
 if (-not $KeepBuild) {
     Remove-Item -LiteralPath $BuildDir -Recurse -Force
 }
-Write-Output "Generated $($Scenarios.Count) scenario PDFs and one combined PDF in $OutputDir"
+Write-Output "Generated $($Scenarios.Count) scenario PDFs, one combined PDF, one DevOps STAR PDF, and one launch guide PDF in $OutputDir"

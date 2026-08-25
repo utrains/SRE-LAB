@@ -4,7 +4,7 @@ This lab teaches a Datadog-first troubleshooting loop across Amazon EKS, ECR, AL
 
 ## 1. Prepare and deploy
 
-Complete the prerequisites and `scripts/setup.sh` workflow in the [README](../README.md#quick-start). Supplying both `DATADOG_API_KEY` and `DATADOG_APP_KEY` installs the Agent and imports dashboards and monitors. Never commit credentials.
+Complete the prerequisites and `scripts/setup.sh` workflow in [Launch the lab](../README.md#launch-the-lab). Obtain both `DATADOG_API_KEY` and `DATADOG_APP_KEY` before launching so setup can install the Agent and import the dashboards and monitors. Never commit credentials.
 
 ```bash
 kubectl get nodes
@@ -46,4 +46,4 @@ Other scripts remain supporting demonstrations, not primary scenarios.
 
 ## 5. Evidence and teardown
 
-Record the start time, first Datadog signal, affected tags, key command output, root cause, recovery, external validation, monitor recovery, and one prevention action. Do not read [instructor-answer-keys.md](incident-scenarios/instructor-answer-keys.md) until completion. Follow the [README teardown instructions](../README.md#cost) when finished.
+Record the start time, first Datadog signal, affected tags, key command output, root cause, recovery, external validation, monitor recovery, and one prevention action. Do not read [instructor-answer-keys.md](incident-scenarios/instructor-answer-keys.md) until completion. Follow the [README teardown instructions](../README.md#destroy-the-environment) when finished.
