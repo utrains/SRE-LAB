@@ -119,3 +119,7 @@ State how external access and trace recovery were verified.
 ## Natural Spoken Version
 
 Use the matching example in [DevOps STAR Scenarios](../devops-star-scenarios.md#4-alb-and-kubernetes-ingress-routing) after completing the lab.
+
+## Brief STAR Example
+
+Users received HTTP 404 responses from one of our applications even though every pod was healthy. My task was to locate the failing hop in the public request path. Datadog showed `GET /` reaching the backend, and the Ingress revealed that `/` targeted port 4000 instead of the frontend on port 80. I corrected the route, waited for ALB reconciliation, and confirmed successful external requests and normal traces.

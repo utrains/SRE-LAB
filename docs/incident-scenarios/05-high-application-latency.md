@@ -120,3 +120,7 @@ State how normal latency and healthy pods were verified.
 ## Natural Spoken Version
 
 Use the matching example in [DevOps STAR Scenarios](../devops-star-scenarios.md#5-high-application-latency) after completing the lab.
+
+## Brief STAR Example
+
+Users reported slow responses from one of our applications while its EKS pods remained healthy. My task was to isolate the source before restarting anything. Datadog APM showed requests taking approximately three seconds, while CPU, memory, readiness, and restarts stayed normal. I found and cleared a 3000 ms application delay setting, after which p95 latency returned to baseline and the monitor recovered.

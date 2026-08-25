@@ -121,3 +121,7 @@ State how stability and memory headroom were verified.
 ## Natural Spoken Version
 
 Use the matching example in [DevOps STAR Scenarios](../devops-star-scenarios.md#3-oomkilled) after completing the lab.
+
+## Brief STAR Example
+
+An internal backend repeatedly restarted after its memory limit was reduced to 20 MiB. My task was to distinguish an application failure from a Kubernetes resource problem. I correlated Datadog memory and restart signals with exit code 137 and `OOMKilled` in the pod state, then restored a measured memory limit. The restart loop stopped, pods remained Ready, and future resource values were based on observed usage.

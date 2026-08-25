@@ -124,3 +124,7 @@ State how readiness and monitor recovery were verified.
 ## Natural Spoken Version
 
 Use the matching example in [DevOps STAR Scenarios](../devops-star-scenarios.md#2-bad-configmap-rollout) after completing the lab.
+
+## Brief STAR Example
+
+One of our internal applications stopped bringing new pods to Ready after a configuration rollout. My task was to identify why only the new pods failed. Datadog events and logs showed probe failures and an application listening on port 4001, while Kubernetes probes still checked port 4000. I restored the correct ConfigMap value and restarted the Deployment. All replicas became Ready, and configuration-to-probe validation was added to deployment checks.
